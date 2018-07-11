@@ -3,6 +3,7 @@ package org.postgresql.core;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.net.NetSocket;
 
+import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
@@ -12,7 +13,7 @@ public class NetSocketStream {
     private Buffer readBuffer = null;
     private int readPos = -1;
     private Queue<Buffer> readableBuffers = new ArrayDeque<>();
-    private Buffer writeBuffer = null;
+    private Buffer writeBuffer = Buffer.buffer();
     private Queue<CompletableFuture<Void>> readerTasks = new ArrayDeque<>();
     private NetSocket netSocket;
     private Throwable error;
@@ -21,6 +22,7 @@ public class NetSocketStream {
         this.netSocket = netSocket;
         this.netSocket.handler(this::onDataAvaialble);
         this.netSocket.exceptionHandler(this::onChannelFaulted);
+        this.netSocket.closeHandler(ignored -> this.onChannelFaulted(new IOException("socket closed")));
     }
 
     public synchronized CompletableFuture<Byte> read() throws Throwable {
@@ -137,7 +139,7 @@ public class NetSocketStream {
         // notify all pending readers about the error
         CompletableFuture<Void> task = this.readerTasks.poll();
         while (task != null) {
-            task.complete(null);
+            task.completeExceptionally(error);
             task = this.readerTasks.poll();
         }
     }
