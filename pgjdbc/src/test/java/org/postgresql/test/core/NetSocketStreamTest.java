@@ -16,13 +16,15 @@ public class NetSocketStreamTest {
         Vertx vertx = Vertx.vertx();
         NetClient netClient = vertx.createNetClient();
         NetSocket socket = VertxHelper
-                .vertxTCompletableFuture((Handler<AsyncResult<NetSocket>> h) -> netClient.connect(80, "www.jdzmj.org", h))
+                .vertxTCompletableFuture((Handler<AsyncResult<NetSocket>> h) -> netClient.connect(80, "www.google.com", h))
                 .get();
         NetSocketStream stream = new NetSocketStream(socket);
         stream.getWriteBuffer().appendString("GET")
                 .appendString("\r\n\r\n");
         stream.flush();
         byte[] data = new byte[20];
+        stream.read(data).get();
+        System.out.println(new String(data));
         stream.read(data).get();
         System.out.println(new String(data));
         socket.close();
