@@ -676,7 +676,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       timeoutMillis = -1;
     }
 
-    boolean useTimeout = timeoutMillis > 0;
+    /*boolean useTimeout = timeoutMillis > 0;
     long startTime = 0;
     int oldTimeout = 0;
     if (useTimeout) {
@@ -687,17 +687,18 @@ public class QueryExecutorImpl extends QueryExecutorBase {
         throw new PSQLException(GT.tr("An error occurred while trying to get the socket "
           + "timeout."), PSQLState.CONNECTION_FAILURE, e);
       }
-    }
+    }*/
 
     try {
       while (pgStream.hasMessagePending() || timeoutMillis >= 0 ) {
-        if (useTimeout && timeoutMillis >= 0) {
+        /*if (useTimeout && timeoutMillis >= 0) {
           setSocketTimeout(timeoutMillis);
-        }
+        }*/
         int c = pgStream.receiveChar();
-        if (useTimeout && timeoutMillis >= 0) {
+
+        /*if (useTimeout && timeoutMillis >= 0) {
           setSocketTimeout(0); // Don't timeout after first char
-        }
+        }*/
         switch (c) {
           case 'A': // Asynchronous Notify
             receiveAsyncNotify();
@@ -709,6 +710,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
           case 'N': // Notice Response (warnings / info)
             SQLWarning warning = receiveNoticeResponse();
             addWarning(warning);
+            /*
             if (useTimeout) {
               long newTimeMillis = System.currentTimeMillis();
               timeoutMillis += startTime - newTimeMillis; // Overflows after 49 days, ignore that
@@ -716,7 +718,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
               if (timeoutMillis == 0) {
                 timeoutMillis = -1; // Don't accidentially wait forever
               }
-            }
+            }*/
             break;
           default:
             throw new PSQLException(GT.tr("Unknown Response Type {0}.", (char) c),
@@ -729,14 +731,15 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       throw new PSQLException(GT.tr("An I/O error occurred while sending to the backend."),
           PSQLState.CONNECTION_FAILURE, ioe);
     } finally {
-      if (useTimeout) {
+      /*if (useTimeout) {
         setSocketTimeout(oldTimeout);
-      }
+      }*/
     }
   }
 
   private void setSocketTimeout(int millis) throws PSQLException {
-    try {
+    // TODO need to figure out a replacement
+    /*try {
       Socket s = pgStream.getSocket();
       if (!s.isClosed()) { // Is this check required?
         pgStream.getSocket().setSoTimeout(millis);
@@ -744,7 +747,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     } catch (SocketException e) {
       throw new PSQLException(GT.tr("An error occurred while trying to reset the socket timeout."),
         PSQLState.CONNECTION_FAILURE, e);
-    }
+    }*/
   }
 
   private byte[] receiveFastpathResult() throws IOException, SQLException {

@@ -114,7 +114,8 @@ public class V3ReplicationProtocol implements ReplicationProtocol {
   }
 
   private void configureSocketTimeout(CommonOptions options) throws PSQLException {
-    if (options.getStatusInterval() == 0) {
+    //TODO figure out a replacement for this
+    /*if (options.getStatusInterval() == 0) {
       return;
     }
 
@@ -132,7 +133,7 @@ public class V3ReplicationProtocol implements ReplicationProtocol {
     } catch (IOException ioe) {
       throw new PSQLException(GT.tr("The connection attempt failed."),
           PSQLState.CONNECTION_UNABLE_TO_CONNECT, ioe);
-    }
+    }*/
   }
 
 

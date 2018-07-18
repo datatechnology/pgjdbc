@@ -28,6 +28,8 @@ public class MakeSSL extends ObjectFactory {
 
   public static void convert(PGStream stream, Properties info)
       throws PSQLException, IOException {
+    //TODO no used anymore
+    /*
     LOGGER.log(Level.FINE, "converting regular socket connection to ssl");
 
     SSLSocketFactory factory;
@@ -97,6 +99,7 @@ public class MakeSSL extends ObjectFactory {
 
     }
     stream.changeSocket(newConnection);
+    */
   }
 
 }

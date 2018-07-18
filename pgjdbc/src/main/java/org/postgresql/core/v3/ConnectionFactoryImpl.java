@@ -6,6 +6,9 @@
 
 package org.postgresql.core.v3;
 
+import io.vertx.core.net.NetClient;
+import io.vertx.core.net.NetClientOptions;
+import io.vertx.core.net.NetSocket;
 import org.postgresql.PGProperty;
 import org.postgresql.core.ConnectionFactory;
 import org.postgresql.core.PGStream;
@@ -22,12 +25,7 @@ import org.postgresql.hostchooser.HostChooserFactory;
 import org.postgresql.hostchooser.HostRequirement;
 import org.postgresql.hostchooser.HostStatus;
 import org.postgresql.sspi.ISSPIClient;
-import org.postgresql.util.GT;
-import org.postgresql.util.HostSpec;
-import org.postgresql.util.MD5Digest;
-import org.postgresql.util.PSQLException;
-import org.postgresql.util.PSQLState;
-import org.postgresql.util.ServerErrorMessage;
+import org.postgresql.util.*;
 
 import java.io.IOException;
 import java.net.ConnectException;
@@ -39,6 +37,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TimeZone;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
@@ -125,7 +125,7 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
           PSQLState.CONNECTION_UNABLE_TO_CONNECT);
     }
 
-    SocketFactory socketFactory = SocketFactoryFactory.getSocketFactory(info);
+    NetClient netClient = VertxHelper.vertx.createNetClient();
 
     HostChooser hostChooser =
         HostChooserFactory.createHostChooser(hostSpecs, targetServerType, info);
@@ -151,52 +151,57 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
       // Establish a connection.
       //
 
+      NetClientOptions options = new NetClientOptions();
+      options.setTrustAll(true);
+      options.setTcpKeepAlive(requireTCPKeepAlive);
+
+      // Set the socket timeout if the "socketTimeout" property has been set.
+      int socketTimeout = PGProperty.SOCKET_TIMEOUT.getInt(info);
+      if (socketTimeout > 0) {
+        options.setConnectTimeout(socketTimeout);
+      }
+
+
+      // Try to set SO_SNDBUF and SO_RECVBUF socket options, if requested.
+      // If receiveBufferSize and send_buffer_size are set to a value greater
+      // than 0, adjust. -1 means use the system default, 0 is ignored since not
+      // supported.
+
+      // Set SO_RECVBUF read buffer size
+      int receiveBufferSize = PGProperty.RECEIVE_BUFFER_SIZE.getInt(info);
+      if (receiveBufferSize > -1) {
+        // value of 0 not a valid buffer size value
+        if (receiveBufferSize > 0) {
+          options.setReceiveBufferSize(receiveBufferSize);
+        } else {
+          LOGGER.log(Level.WARNING, "Ignore invalid value for receiveBufferSize: {0}", receiveBufferSize);
+        }
+      }
+
+      // Set SO_SNDBUF write buffer size
+      int sendBufferSize = PGProperty.SEND_BUFFER_SIZE.getInt(info);
+      if (sendBufferSize > -1) {
+        if (sendBufferSize > 0) {
+          options.setSendBufferSize(sendBufferSize);
+        } else {
+          LOGGER.log(Level.WARNING, "Ignore invalid value for sendBufferSize: {0}", sendBufferSize);
+        }
+      }
+
+      LOGGER.log(Level.FINE, "Receive Buffer Size is {0}", receiveBufferSize);
+      LOGGER.log(Level.FINE, "Send Buffer Size is {0}", sendBufferSize);
+
       PGStream newStream = null;
       try {
-        newStream = new PGStream(socketFactory, hostSpec, connectTimeout);
+        NetSocket netSocket = VertxHelper
+                .<NetSocket>vertxTCompletableFuture(h -> netClient.connect(hostSpec.getPort(), hostSpec.getHost(), h))
+                .get();
+        newStream = new PGStream(netClient, netSocket, hostSpec, connectTimeout);
 
         // Construct and send an ssl startup packet if requested.
         if (trySSL) {
           newStream = enableSSL(newStream, requireSSL, info, connectTimeout);
         }
-
-        // Set the socket timeout if the "socketTimeout" property has been set.
-        int socketTimeout = PGProperty.SOCKET_TIMEOUT.getInt(info);
-        if (socketTimeout > 0) {
-          newStream.getSocket().setSoTimeout(socketTimeout * 1000);
-        }
-
-        // Enable TCP keep-alive probe if required.
-        newStream.getSocket().setKeepAlive(requireTCPKeepAlive);
-
-        // Try to set SO_SNDBUF and SO_RECVBUF socket options, if requested.
-        // If receiveBufferSize and send_buffer_size are set to a value greater
-        // than 0, adjust. -1 means use the system default, 0 is ignored since not
-        // supported.
-
-        // Set SO_RECVBUF read buffer size
-        int receiveBufferSize = PGProperty.RECEIVE_BUFFER_SIZE.getInt(info);
-        if (receiveBufferSize > -1) {
-          // value of 0 not a valid buffer size value
-          if (receiveBufferSize > 0) {
-            newStream.getSocket().setReceiveBufferSize(receiveBufferSize);
-          } else {
-            LOGGER.log(Level.WARNING, "Ignore invalid value for receiveBufferSize: {0}", receiveBufferSize);
-          }
-        }
-
-        // Set SO_SNDBUF write buffer size
-        int sendBufferSize = PGProperty.SEND_BUFFER_SIZE.getInt(info);
-        if (sendBufferSize > -1) {
-          if (sendBufferSize > 0) {
-            newStream.getSocket().setSendBufferSize(sendBufferSize);
-          } else {
-            LOGGER.log(Level.WARNING, "Ignore invalid value for sendBufferSize: {0}", sendBufferSize);
-          }
-        }
-
-        LOGGER.log(Level.FINE, "Receive Buffer Size is {0}", newStream.getSocket().getReceiveBufferSize());
-        LOGGER.log(Level.FINE, "Send Buffer Size is {0}", newStream.getSocket().getSendBufferSize());
 
         List<String[]> paramList = getParametersForStartup(user, database, info);
         sendStartupPacket(newStream, paramList);
@@ -245,7 +250,7 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
         throw new PSQLException(GT.tr(
             "Connection to {0} refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections.",
             hostSpec), PSQLState.CONNECTION_UNABLE_TO_CONNECT, cex);
-      } catch (IOException ioe) {
+      } catch (InterruptedException | ExecutionException | IOException ioe) {
         closeStream(newStream);
         GlobalHostStatusTracker.reportHostStatus(hostSpec, HostStatus.ConnectFail);
         knownStates.put(hostSpec, HostStatus.ConnectFail);
@@ -348,7 +353,7 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
   }
 
   private PGStream enableSSL(PGStream pgStream, boolean requireSSL, Properties info, int connectTimeout)
-      throws IOException, SQLException {
+      throws IOException, SQLException, InterruptedException, ExecutionException {
     LOGGER.log(Level.FINEST, " FE=> SSLRequest");
 
     // Send SSL request packet
@@ -371,7 +376,10 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
 
         // We have to reconnect to continue.
         pgStream.close();
-        return new PGStream(pgStream.getSocketFactory(), pgStream.getHostSpec(), connectTimeout);
+        NetSocket netSocket = VertxHelper.<NetSocket>vertxTCompletableFuture(
+                h -> pgStream.getNetClient().connect(pgStream.getHostSpec().getPort(), pgStream.getHostSpec().getHost(), h))
+                .get();
+        return new PGStream(pgStream.getNetClient(), netSocket, pgStream.getHostSpec(), connectTimeout);
 
       case 'N':
         LOGGER.log(Level.FINEST, " <=BE SSLRefused");
@@ -388,7 +396,10 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
         LOGGER.log(Level.FINEST, " <=BE SSLOk");
 
         // Server supports ssl
-        org.postgresql.ssl.MakeSSL.convert(pgStream, info);
+        //org.postgresql.ssl.MakeSSL.convert(pgStream, info);
+        CompletableFuture<Void> upgradeResult = new CompletableFuture<>();
+        pgStream.getNetSocket().upgradeToSsl(ignored -> upgradeResult.complete(null));
+        upgradeResult.get();
         return pgStream;
 
       default:
