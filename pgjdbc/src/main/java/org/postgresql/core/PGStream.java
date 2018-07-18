@@ -5,12 +5,13 @@
 
 package org.postgresql.core;
 
-import io.vertx.core.Vertx;
 import io.vertx.core.net.NetClient;
 import io.vertx.core.net.NetSocket;
-import org.postgresql.util.*;
+import org.postgresql.util.GT;
+import org.postgresql.util.HostSpec;
+import org.postgresql.util.PSQLException;
+import org.postgresql.util.PSQLState;
 
-import javax.net.SocketFactory;
 import java.io.*;
 import java.net.Socket;
 import java.util.concurrent.CompletableFuture;
@@ -24,41 +25,31 @@ import java.util.concurrent.CompletableFuture;
  */
 public class PGStream implements Closeable, Flushable {
 
-    private final static Vertx vertx = Vertx.vertx();
-    private final SocketFactory socketFactory;
     private final HostSpec hostSpec;
 
     private final byte[] _int4buf;
     private final byte[] _int2buf;
 
+    private int timeout;
     private NetSocket netSocket;
     private NetClient netClient;
     private NetSocketStream stream;
     private byte[] streamBuffer;
 
     private Encoding encoding;
-    private Writer encodingWriter;
 
     /**
      * Constructor: Connect to the PostgreSQL back end and return a stream connection.
      *
-     * @param socketFactory socket factory to use when creating sockets
-     * @param hostSpec      the host and port to connect to
-     * @param timeout       timeout in milliseconds, or 0 if no timeout set
+     * @param netClient net client to use when creating sockets
+     * @param hostSpec  the host and port to connect to
      * @throws IOException if an IOException occurs below it.
      */
-    public PGStream(SocketFactory socketFactory, HostSpec hostSpec, int timeout) throws IOException {
-        this.socketFactory = socketFactory;
+    public PGStream(NetClient netClient, NetSocket netSocket, HostSpec hostSpec, int timeout) throws IOException {
         this.hostSpec = hostSpec;
-        this.netClient = vertx.createNetClient();
-        try {
-            this.netSocket =
-                    VertxHelper.<NetSocket>vertxTCompletableFuture(h -> this.netClient.connect(hostSpec.getPort(), hostSpec.getHost(), h))
-                            .get();
-        } catch (Exception err) {
-            throw new IOException("failed to connect to target", err);
-        }
-
+        this.netClient = netClient;
+        this.netSocket = netSocket;
+        this.timeout = timeout;
         this.stream = new NetSocketStream(this.netSocket);
         setEncoding(Encoding.getJVMEncoding("UTF-8"));
 
@@ -66,30 +57,16 @@ public class PGStream implements Closeable, Flushable {
         _int4buf = new byte[4];
     }
 
-    /**
-     * Constructor: Connect to the PostgreSQL back end and return a stream connection.
-     *
-     * @param socketFactory socket factory
-     * @param hostSpec      the host and port to connect to
-     * @throws IOException if an IOException occurs below it.
-     * @deprecated use {@link #PGStream(SocketFactory, org.postgresql.util.HostSpec, int)}
-     */
-    @Deprecated
-    public PGStream(SocketFactory socketFactory, HostSpec hostSpec) throws IOException {
-        this(socketFactory, hostSpec, 0);
-    }
-
     public HostSpec getHostSpec() {
         return hostSpec;
     }
 
-    public Socket getSocket() {
-        //TODO
-        return new Socket();
+    public NetSocket getNetSocket() {
+        return this.netSocket;
     }
 
-    public SocketFactory getSocketFactory() {
-        return socketFactory;
+    public NetClient getNetClient() {
+        return this.netClient;
     }
 
     /**
@@ -119,6 +96,10 @@ public class PGStream implements Closeable, Flushable {
         return encoding;
     }
 
+    public int getTimeout() {
+        return this.timeout;
+    }
+
     /**
      * Change the encoding used by this connection.
      *
@@ -131,24 +112,6 @@ public class PGStream implements Closeable, Flushable {
         }
 
         this.encoding = encoding;
-    }
-
-    /**
-     * Get a Writer instance that encodes directly onto the underlying stream.
-     * <p>
-     * The returned Writer should not be closed, as it's a shared object. Writer.flush needs to be
-     * called when switching between use of the Writer and use of the PGStream write methods, but it
-     * won't actually flush output all the way out -- call {@link #flush} to actually ensure all
-     * output has been pushed to the server.
-     *
-     * @return the shared Writer instance
-     * @throws IOException if something goes wrong.
-     */
-    public Writer getEncodingWriter() throws IOException {
-        if (encodingWriter == null) {
-            throw new IOException("No encoding has been set on this connection");
-        }
-        return encodingWriter;
     }
 
     /**

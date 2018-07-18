@@ -2,11 +2,14 @@ package org.postgresql.util;
 
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
+import io.vertx.core.Vertx;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 public final class VertxHelper {
+
+    public static final Vertx vertx = Vertx.vertx();
 
     public static <TResult> CompletableFuture<TResult> vertxTCompletableFuture(Consumer<Handler<AsyncResult<TResult>>> handlerConsumer) {
         CompletableFuture<TResult> completableFuture = new CompletableFuture<>();
