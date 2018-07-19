@@ -9,7 +9,28 @@ import java.util.function.Consumer;
 
 public final class VertxHelper {
 
-    public static final Vertx vertx = Vertx.vertx();
+    private static Vertx vertx;
+    private static Object singletonLock = new Object();
+
+    public static void updateVertx(Vertx instance) {
+        if (vertx != null) {
+            throw new RuntimeException("vertx already assigned, cannot be changed anymore");
+        }
+
+        vertx = instance;
+    }
+
+    public static Vertx getVertx() {
+        if (vertx == null) {
+            synchronized (singletonLock) {
+                if (vertx == null) {
+                    vertx = Vertx.vertx();
+                }
+            }
+        }
+
+        return vertx;
+    }
 
     public static <TResult> CompletableFuture<TResult> vertxTCompletableFuture(Consumer<Handler<AsyncResult<TResult>>> handlerConsumer) {
         CompletableFuture<TResult> completableFuture = new CompletableFuture<>();

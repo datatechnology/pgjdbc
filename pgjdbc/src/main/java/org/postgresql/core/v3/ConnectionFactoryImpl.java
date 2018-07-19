@@ -91,7 +91,7 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
     }
 
     @Override
-    public QueryExecutor openConnectionImpl(HostSpec[] hostSpecs, String user, String database,
+    public CompletableFuture<QueryExecutor> openConnectionImpl(HostSpec[] hostSpecs, String user, String database,
                                             Properties info) throws SQLException {
         // Extract interesting values from the info properties:
         // - the SSL setting
@@ -127,7 +127,7 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
                     PSQLState.CONNECTION_UNABLE_TO_CONNECT);
         }
 
-        NetClient netClient = VertxHelper.vertx.createNetClient();
+        NetClient netClient = VertxHelper.getVertx().createNetClient();
 
         HostChooser hostChooser =
                 HostChooserFactory.createHostChooser(hostSpecs, targetServerType, info);
@@ -195,9 +195,8 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
 
             PGStream newStream = null;
             try {
-                NetSocket netSocket = VertxHelper
-                        .<NetSocket>vertxTCompletableFuture(h -> netClient.connect(hostSpec.getPort(), hostSpec.getHost(), h))
-                        .get();
+                NetSocket netSocket = await(VertxHelper
+                        .vertxTCompletableFuture(h -> netClient.connect(hostSpec.getPort(), hostSpec.getHost(), h)));
                 newStream = new PGStream(netClient, netSocket, hostSpec, connectTimeout);
 
                 // Construct and send an ssl startup packet if requested.
@@ -209,7 +208,7 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
                 sendStartupPacket(newStream, paramList);
 
                 // Do authentication (until AuthenticationOk).
-                doAuthentication(newStream, hostSpec.getHost(), user, info);
+                await(doAuthentication(newStream, hostSpec.getHost(), user, info));
 
                 int cancelSignalTimeout = PGProperty.CANCEL_SIGNAL_TIMEOUT.getInt(info) * 1000;
 
@@ -232,7 +231,7 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
                 runInitialQueries(queryExecutor, info);
 
                 // And we're done.
-                return queryExecutor;
+                return CompletableFuture.completedFuture(queryExecutor);
             } catch (UnsupportedProtocolException upe) {
                 // Swallow this and return null so ConnectionFactory tries the next protocol.
                 LOGGER.log(Level.SEVERE, "Protocol not supported, abandoning connection.", upe);
@@ -448,7 +447,7 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
         pgStream.flush();
     }
 
-    private void doAuthentication(PGStream pgStream, String host, String user, Properties info) throws IOException, SQLException {
+    private CompletableFuture<Void> doAuthentication(PGStream pgStream, String host, String user, Properties info) throws IOException, SQLException {
         // Now get the response from the backend, either an error message
         // or an authentication request
 
@@ -463,9 +462,9 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
         //#endif
 
         try {
-            authloop:
-            while (true) {
-                int beresp = pgStream.receiveChar();
+            boolean c = true;
+            while (c) {
+                int beresp = await(pgStream.receiveCharAsync());
 
                 switch (beresp) {
                     case 'E':
@@ -475,7 +474,7 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
                         // The most common one to be thrown here is:
                         // "User authentication failed"
                         //
-                        int l_elen = pgStream.receiveInteger4();
+                        int l_elen = await(pgStream.receiveInteger4Async());
                         if (l_elen > 30000) {
                             // if the error length is > than 30000 we assume this is really a v2 protocol
                             // server, so trigger fallback.
@@ -490,10 +489,10 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
                     case 'R':
                         // Authentication request.
                         // Get the message length
-                        int l_msgLen = pgStream.receiveInteger4();
+                        int l_msgLen = await(pgStream.receiveInteger4Async());
 
                         // Get the type of request
-                        int areq = pgStream.receiveInteger4();
+                        int areq = await(pgStream.receiveInteger4Async());
 
                         // Process the request.
                         switch (areq) {
@@ -655,7 +654,8 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
                             case AUTH_REQ_OK:
                                 /* Cleanup after successful authentication */
                                 LOGGER.log(Level.FINEST, " <=BE AuthenticationOk");
-                                break authloop; // We're done.
+                                c = false; // We're done.
+                                break;
 
                             default:
                                 LOGGER.log(Level.FINEST, " <=BE AuthenticationReq (unsupported type {0})", areq);
@@ -671,6 +671,8 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
                                 PSQLState.PROTOCOL_VIOLATION);
                 }
             }
+
+            return CompletableFuture.completedFuture(null);
         } finally {
             /* Cleanup after successful or failed authentication attempts */
             if (sspiClient != null) {

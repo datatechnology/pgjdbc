@@ -16,6 +16,9 @@ import org.postgresql.util.PSQLState;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
+
+import static com.ea.async.Async.await;
 
 /**
  * Handles protocol-specific connection setup.
@@ -40,16 +43,16 @@ public abstract class ConnectionFactory {
    * @return the new, initialized, connection
    * @throws SQLException if the connection could not be established.
    */
-  public static QueryExecutor openConnection(HostSpec[] hostSpecs, String user,
-      String database, Properties info) throws SQLException {
+  public static CompletableFuture<QueryExecutor> openConnection(HostSpec[] hostSpecs, String user,
+                                                               String database, Properties info) throws SQLException {
     String protoName = PGProperty.PROTOCOL_VERSION.get(info);
 
     if (protoName == null || protoName.isEmpty() || "3".equals(protoName)) {
       ConnectionFactory connectionFactory = new ConnectionFactoryImpl();
-      QueryExecutor queryExecutor = connectionFactory.openConnectionImpl(
-          hostSpecs, user, database, info);
+      QueryExecutor queryExecutor = await(connectionFactory.openConnectionImpl(
+          hostSpecs, user, database, info));
       if (queryExecutor != null) {
-        return queryExecutor;
+        return CompletableFuture.completedFuture(queryExecutor);
       }
     }
 
@@ -73,7 +76,7 @@ public abstract class ConnectionFactory {
    * @throws SQLException if the connection could not be established for a reason other than
    *         protocol version incompatibility.
    */
-  public abstract QueryExecutor openConnectionImpl(HostSpec[] hostSpecs, String user,
+  public abstract CompletableFuture<QueryExecutor> openConnectionImpl(HostSpec[] hostSpecs, String user,
       String database, Properties info) throws SQLException;
 
   /**

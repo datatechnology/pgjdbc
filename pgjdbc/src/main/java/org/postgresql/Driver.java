@@ -5,6 +5,8 @@
 
 package org.postgresql;
 
+import org.postgresql.core.ConnectionFactory;
+import org.postgresql.core.QueryExecutor;
 import org.postgresql.jdbc.PgConnection;
 
 import org.postgresql.util.DriverInfo;
@@ -32,11 +34,14 @@ import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.logging.Formatter;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 import java.util.logging.StreamHandler;
+
+import static com.ea.async.Async.await;
 
 /**
  * The Java SQL framework allows for multiple database drivers. Each driver should supply a class
@@ -251,7 +256,7 @@ public class Driver implements java.sql.Driver {
       // more details.
       long timeout = timeout(props);
       if (timeout <= 0) {
-        return makeConnection(url, props);
+        return makeConnection(url, props).get();
       }
 
       ConnectThread ct = new ConnectThread(url, props);
@@ -359,7 +364,7 @@ public class Driver implements java.sql.Driver {
       Throwable error;
 
       try {
-        conn = makeConnection(url, props);
+        conn = makeConnection(url, props).get();
         error = null;
       } catch (Throwable t) {
         conn = null;
@@ -448,8 +453,9 @@ public class Driver implements java.sql.Driver {
    * @return a new connection
    * @throws SQLException if the connection could not be made
    */
-  private static Connection makeConnection(String url, Properties props) throws SQLException {
-    return new PgConnection(hostSpecs(props), user(props), database(props), props, url);
+  private static CompletableFuture<Connection> makeConnection(String url, Properties props) throws SQLException {
+    QueryExecutor queryExecutor = await(ConnectionFactory.openConnection(hostSpecs(props), user(props), database(props), props));
+    return CompletableFuture.completedFuture(new PgConnection(queryExecutor, props, url));
   }
 
   /**
