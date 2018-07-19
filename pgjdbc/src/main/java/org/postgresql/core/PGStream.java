@@ -13,8 +13,10 @@ import org.postgresql.util.PSQLException;
 import org.postgresql.util.PSQLState;
 
 import java.io.*;
-import java.net.Socket;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+
+import static com.ea.async.Async.await;
 
 /**
  * Wrapper around the raw connection to the server that implements some basic primitives
@@ -79,17 +81,6 @@ public class PGStream implements Closeable, Flushable {
      */
     public boolean hasMessagePending() throws IOException {
         return this.stream.moreToRead();
-    }
-
-    /**
-     * Switch this stream to using a new socket. Any existing socket is <em>not</em> closed; it's
-     * assumed that we are changing to a new socket that delegates to the original socket (e.g. SSL).
-     *
-     * @param socket the new socket to change to
-     * @throws IOException if something goes wrong
-     */
-    public void changeSocket(Socket socket) throws IOException {
-        throw new IOException("Not supported");
     }
 
     public Encoding getEncoding() {
@@ -202,10 +193,14 @@ public class PGStream implements Closeable, Flushable {
      */
     public int peekChar() throws IOException {
         try {
-            return this.stream.peek().get();
+            return this.peekCharAsync().get();
         } catch (Throwable err) {
             throw new IOException(err.getMessage(), err);
         }
+    }
+
+    public CompletableFuture<Integer> peekCharAsync() {
+        return this.stream.peek();
     }
 
     /**
@@ -216,10 +211,14 @@ public class PGStream implements Closeable, Flushable {
      */
     public int receiveChar() throws IOException {
         try {
-            return this.stream.read().get();
+            return this.receiveCharAsync().get();
         } catch (Throwable err) {
             throw new IOException(err.getMessage(), err);
         }
+    }
+
+    public CompletableFuture<Integer> receiveCharAsync() {
+        return this.stream.read();
     }
 
     /**
@@ -230,13 +229,20 @@ public class PGStream implements Closeable, Flushable {
      */
     public int receiveInteger4() throws IOException {
         try {
-            this.stream.read(_int4buf).get();
-        } catch (Throwable err) {
-            throw new IOException(err.getMessage(), err);
+            return this.receiveInteger4Async().get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new IOException(e.getMessage(), e);
         }
+    }
 
-        return (_int4buf[0] & 0xFF) << 24 | (_int4buf[1] & 0xFF) << 16 | (_int4buf[2] & 0xFF) << 8
-                | _int4buf[3] & 0xFF;
+    public CompletableFuture<Integer> receiveInteger4Async() {
+        byte[] buf = new byte[4];
+        await(this.stream.read(buf));
+        return CompletableFuture.completedFuture(
+                (buf[0] & 0xFF) << 24 |
+                        (buf[1] & 0xFF) << 16 |
+                        (buf[2] & 0xFF) << 8 |
+                        buf[3] & 0xFF);
     }
 
     /**
@@ -247,12 +253,16 @@ public class PGStream implements Closeable, Flushable {
      */
     public int receiveInteger2() throws IOException {
         try {
-            this.stream.read(_int2buf).get();
+            return this.receiveInteger2Async().get();
         } catch (Throwable err) {
             throw new IOException(err.getMessage(), err);
         }
+    }
 
-        return (_int2buf[0] & 0xFF) << 8 | _int2buf[1] & 0xFF;
+    public CompletableFuture<Integer> receiveInteger2Async() {
+        byte[] buf = new byte[2];
+        await(this.stream.read(buf));
+        return CompletableFuture.completedFuture((buf[0] & 0xFF) << 8 | buf[1] & 0xFF);
     }
 
     /**
@@ -263,14 +273,17 @@ public class PGStream implements Closeable, Flushable {
      * @throws IOException if something wrong happens
      */
     public String receiveString(int len) throws IOException {
-        byte[] buffer = new byte[len];
         try {
-            this.stream.read(buffer).get();
+            return this.receiveStringAsync(len).get();
         } catch (Throwable err) {
             throw new IOException(err.getMessage(), err);
         }
+    }
 
-        return encoding.decode(buffer, 0, len);
+    public CompletableFuture<String> receiveStringAsync(int len) throws IOException {
+        byte[] buffer = new byte[len];
+        await(this.stream.read(buffer));
+        return CompletableFuture.completedFuture(encoding.decode(buffer, 0, len));
     }
 
     /**

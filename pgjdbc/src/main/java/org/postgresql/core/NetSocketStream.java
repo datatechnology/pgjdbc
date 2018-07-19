@@ -24,11 +24,13 @@ public class NetSocketStream {
         this.netSocket.handler(this::onDataAvaialble);
         this.netSocket.exceptionHandler(this::onChannelFaulted);
         this.netSocket.closeHandler(ignored -> {
-            this.closed = true;
-            CompletableFuture<Void> pendingRead = this.readerTasks.poll();
-            while (pendingRead != null) {
-                pendingRead.completeExceptionally(new IOException("socket closed"));
-                pendingRead = this.readerTasks.poll();
+            synchronized (this) {
+                this.closed = true;
+                CompletableFuture<Void> pendingRead = this.readerTasks.poll();
+                while (pendingRead != null) {
+                    pendingRead.completeExceptionally(new IOException("socket closed"));
+                    pendingRead = this.readerTasks.poll();
+                }
             }
         });
     }
@@ -163,11 +165,12 @@ public class NetSocketStream {
         }
 
         if (this.checkOrResetReadBuffer()) {
-            result.complete(this.readBuffer.getByte(this.readPos) & 0xFF);
+            int byteValue = this.readBuffer.getByte(this.readPos) & 0xFF;
             if (advancePos) {
                 this.readPos += 1;
             }
 
+            result.complete(byteValue);
             CompletableFuture<Void> nextTask = this.readerTasks.poll();
             if (nextTask != null) {
                 nextTask.complete(null);
@@ -198,7 +201,7 @@ public class NetSocketStream {
 
         while (this.checkOrResetReadBuffer() && bytesToRead > 0) {
             int bytesRead = Math.min(bytesToRead, this.readBuffer.length() - this.readPos);
-            this.readBuffer.getBytes(this.readPos, this.readPos + bytesRead, buf);
+            this.readBuffer.getBytes(this.readPos, this.readPos + bytesRead, buf, offset);
             offset += bytesRead;
             bytesToRead -= bytesRead;
             this.readPos += bytesRead;

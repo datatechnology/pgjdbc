@@ -174,9 +174,7 @@ public class PgConnection implements BaseConnection {
   //
   // Ctor.
   //
-  public PgConnection(HostSpec[] hostSpecs,
-                      String user,
-                      String database,
+  public PgConnection(QueryExecutor queryExecutor,
                       Properties info,
                       String url) throws SQLException {
     // Print out the driver version number
@@ -192,7 +190,7 @@ public class PgConnection implements BaseConnection {
     }
 
     // Now make the initial connection and set up local state
-    this.queryExecutor = ConnectionFactory.openConnection(hostSpecs, user, database, info);
+    this.queryExecutor = queryExecutor;
 
     // WARNING for unsupported servers (8.1 and lower are not supported)
     if (LOGGER.isLoggable(Level.WARNING) && !haveMinimumServerVersion(ServerVersion.v8_2)) {
