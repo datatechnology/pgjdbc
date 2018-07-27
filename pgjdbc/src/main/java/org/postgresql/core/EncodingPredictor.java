@@ -131,7 +131,7 @@ public class EncodingPredictor {
       }
 
       int j = 1;
-      for (; j < secondLength && first[firstOffset + i + j] == second[secondOffset + j]; j++) {
+      for (; i < firstLength && j < secondLength && first[firstOffset + i + j] == second[secondOffset + j]; j++) {
         // compare arrays
       }
       if (j == secondLength) {
