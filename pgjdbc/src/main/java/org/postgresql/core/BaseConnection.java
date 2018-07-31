@@ -14,6 +14,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.TimerTask;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Driver-internal connection interface. Application code should not use this interface.
@@ -34,9 +35,9 @@ public interface BaseConnection extends PGConnection, Connection {
    * @return the (non-null) returned resultset
    * @throws SQLException if something goes wrong.
    */
-  ResultSet execSQLQuery(String s) throws SQLException;
+  CompletableFuture<ResultSet> execSQLQuery(String s) throws SQLException;
 
-  ResultSet execSQLQuery(String s, int resultSetType, int resultSetConcurrency)
+  CompletableFuture<ResultSet> execSQLQuery(String s, int resultSetType, int resultSetConcurrency)
       throws SQLException;
 
   /**
@@ -44,9 +45,10 @@ public interface BaseConnection extends PGConnection, Connection {
    * regardless of the autocommit setting.
    *
    * @param s the query to execute
+ * @return 
    * @throws SQLException if something goes wrong.
    */
-  void execSQLUpdate(String s) throws SQLException;
+  CompletableFuture<Void> execSQLUpdate(String s) throws SQLException;
 
   /**
    * Get the QueryExecutor implementation for this connection.

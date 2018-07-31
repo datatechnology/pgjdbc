@@ -70,9 +70,12 @@ import java.util.StringTokenizer;
 import java.util.TimeZone;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import static com.ea.async.Async.await;
 
 public class PgConnection implements BaseConnection {
 
@@ -405,14 +408,14 @@ public class PgConnection implements BaseConnection {
 
   }
 
-  public ResultSet execSQLQuery(String s) throws SQLException {
+  public CompletableFuture<ResultSet> execSQLQuery(String s) throws SQLException {
     return execSQLQuery(s, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
   }
 
-  public ResultSet execSQLQuery(String s, int resultSetType, int resultSetConcurrency)
+  public CompletableFuture<ResultSet> execSQLQuery(String s, int resultSetType, int resultSetConcurrency)
       throws SQLException {
     BaseStatement stat = (BaseStatement) createStatement(resultSetType, resultSetConcurrency);
-    boolean hasResultSet = stat.executeWithFlags(s, QueryExecutor.QUERY_SUPPRESS_BEGIN);
+    boolean hasResultSet = await(stat.executeWithFlags(s, QueryExecutor.QUERY_SUPPRESS_BEGIN));
 
     while (!hasResultSet && stat.getUpdateCount() != -1) {
       hasResultSet = stat.getMoreResults();
@@ -429,13 +432,13 @@ public class PgConnection implements BaseConnection {
       addWarning(warnings);
     }
 
-    return stat.getResultSet();
+    return CompletableFuture.completedFuture(stat.getResultSet());
   }
 
-  public void execSQLUpdate(String s) throws SQLException {
+  public CompletableFuture<Void> execSQLUpdate(String s) throws SQLException {
     BaseStatement stmt = (BaseStatement) createStatement();
-    if (stmt.executeWithFlags(s, QueryExecutor.QUERY_NO_METADATA | QueryExecutor.QUERY_NO_RESULTS
-        | QueryExecutor.QUERY_SUPPRESS_BEGIN)) {
+    if (await(stmt.executeWithFlags(s, QueryExecutor.QUERY_NO_METADATA | QueryExecutor.QUERY_NO_RESULTS
+        | QueryExecutor.QUERY_SUPPRESS_BEGIN))) {
       throw new PSQLException(GT.tr("A result was returned when none was expected."),
           PSQLState.TOO_MANY_RESULTS);
     }
@@ -448,6 +451,8 @@ public class PgConnection implements BaseConnection {
     }
 
     stmt.close();
+    
+    return CompletableFuture.completedFuture(null);
   }
 
   /**
@@ -794,7 +799,7 @@ public class PgConnection implements BaseConnection {
     checkClosed();
 
     String level = null;
-    final ResultSet rs = execSQLQuery("SHOW TRANSACTION ISOLATION LEVEL"); // nb: no BEGIN triggered
+    final ResultSet rs = await(execSQLQuery("SHOW TRANSACTION ISOLATION LEVEL")); // nb: no BEGIN triggered
     if (rs.next()) {
       level = rs.getString(1);
     }

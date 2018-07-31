@@ -20,6 +20,7 @@ import java.sql.SQLWarning;
 import java.util.List;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Abstracts the protocol-specific details of executing a query.
@@ -133,9 +134,10 @@ public interface QueryExecutor extends TypeTransferModeRegistry {
    * @param fetchSize if QUERY_FORWARD_CURSOR is set, the preferred number of rows to retrieve
    *        before suspending
    * @param flags a combination of QUERY_* flags indicating how to handle the query.
+ * @return 
    * @throws SQLException if query execution fails
    */
-  void execute(Query query, ParameterList parameters, ResultHandler handler, int maxRows,
+  CompletableFuture<Void> execute(Query query, ParameterList parameters, ResultHandler handler, int maxRows,
       int fetchSize, int flags) throws SQLException;
 
   /**
