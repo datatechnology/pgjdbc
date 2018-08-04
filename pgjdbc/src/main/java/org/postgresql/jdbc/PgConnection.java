@@ -435,7 +435,7 @@ public class PgConnection implements BaseConnection {
     return CompletableFuture.completedFuture(stat.getResultSet());
   }
 
-  public CompletableFuture<Void> execSQLUpdate(String s) throws SQLException {
+  public void execSQLUpdate(String s) throws SQLException {
     BaseStatement stmt = (BaseStatement) createStatement();
     if (await(stmt.executeWithFlags(s, QueryExecutor.QUERY_NO_METADATA | QueryExecutor.QUERY_NO_RESULTS
         | QueryExecutor.QUERY_SUPPRESS_BEGIN))) {
@@ -452,7 +452,6 @@ public class PgConnection implements BaseConnection {
 
     stmt.close();
     
-    return CompletableFuture.completedFuture(null);
   }
 
   /**
