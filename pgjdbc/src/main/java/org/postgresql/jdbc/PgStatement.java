@@ -28,8 +28,11 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.TimerTask;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
+
+import static com.ea.async.Async.await;
 
 public class PgStatement implements Statement, BaseStatement {
   private static final String[] NO_RETURNING_COLUMNS = new String[0];
@@ -221,7 +224,7 @@ public class PgStatement implements Statement, BaseStatement {
   }
 
   public java.sql.ResultSet executeQuery(String p_sql) throws SQLException {
-    if (!executeWithFlags(p_sql, 0)) {
+    if (!await(executeWithFlags(p_sql, 0))) {
       throw new PSQLException(GT.tr("No results were returned by the query."), PSQLState.NO_DATA);
     }
 
@@ -263,14 +266,14 @@ public class PgStatement implements Statement, BaseStatement {
   }
 
   public boolean execute(String p_sql) throws SQLException {
-    return executeWithFlags(p_sql, 0);
+    return await(executeWithFlags(p_sql, 0));
   }
 
-  public boolean executeWithFlags(String sql, int flags) throws SQLException {
+  public CompletableFuture<Boolean> executeWithFlags(String sql, int flags) throws SQLException {
     return executeCachedSql(sql, flags, NO_RETURNING_COLUMNS);
   }
 
-  private boolean executeCachedSql(String sql, int flags, String[] columnNames) throws SQLException {
+  private CompletableFuture<Boolean> executeCachedSql(String sql, int flags, String[] columnNames) throws SQLException {
     PreferQueryMode preferQueryMode = connection.getPreferQueryMode();
     // Simple statements should not replace ?, ? with $1, $2
     boolean shouldUseParameterized = false;
@@ -290,24 +293,24 @@ public class PgStatement implements Statement, BaseStatement {
     }
     boolean res;
     try {
-      res = executeWithFlags(cachedQuery, flags);
+      res = await(executeWithFlags(cachedQuery, flags));
     } finally {
       if (shouldCache) {
         queryExecutor.releaseQuery(cachedQuery);
       }
     }
-    return res;
+    return CompletableFuture.completedFuture(res);
   }
 
-  public boolean executeWithFlags(CachedQuery simpleQuery, int flags) throws SQLException {
+  public CompletableFuture<Boolean> executeWithFlags(CachedQuery simpleQuery, int flags) throws SQLException {
     checkClosed();
     if (connection.getPreferQueryMode().compareTo(PreferQueryMode.EXTENDED) < 0) {
       flags |= QueryExecutor.QUERY_EXECUTE_AS_SIMPLE;
     }
-    execute(simpleQuery, null, flags);
+    await(execute(simpleQuery, null, flags));
     synchronized (this) {
       checkClosed();
-      return (result != null && result.getResultSet() != null);
+      return CompletableFuture.completedFuture((result != null && result.getResultSet() != null));
     }
   }
 
@@ -359,10 +362,10 @@ public class PgStatement implements Statement, BaseStatement {
     return false;
   }
 
-  protected final void execute(CachedQuery cachedQuery, ParameterList queryParameters, int flags)
+  protected final CompletableFuture<Void> execute(CachedQuery cachedQuery, ParameterList queryParameters, int flags)
       throws SQLException {
     try {
-      executeInternal(cachedQuery, queryParameters, flags);
+      await(executeInternal(cachedQuery, queryParameters, flags));
     } catch (SQLException e) {
       // Don't retry composite queries as it might get partially executed
       if (cachedQuery.query.getSubqueries() != null
@@ -371,11 +374,12 @@ public class PgStatement implements Statement, BaseStatement {
       }
       cachedQuery.query.close();
       // Execute the query one more time
-      executeInternal(cachedQuery, queryParameters, flags);
+      await(executeInternal(cachedQuery, queryParameters, flags));
     }
+    return CompletableFuture.completedFuture(null);
   }
 
-  private void executeInternal(CachedQuery cachedQuery, ParameterList queryParameters, int flags)
+  private CompletableFuture<Void> executeInternal(CachedQuery cachedQuery, ParameterList queryParameters, int flags)
       throws SQLException {
     closeForNextExecution();
 
@@ -424,8 +428,8 @@ public class PgStatement implements Statement, BaseStatement {
       // thus sending a describe request.
       int flags2 = flags | QueryExecutor.QUERY_DESCRIBE_ONLY;
       StatementResultHandler handler2 = new StatementResultHandler();
-      connection.getQueryExecutor().execute(queryToExecute, queryParameters, handler2, 0, 0,
-          flags2);
+      await(connection.getQueryExecutor().execute(queryToExecute, queryParameters, handler2, 0, 0,
+          flags2));
       ResultWrapper result2 = handler2.getResults();
       if (result2 != null) {
         result2.getResultSet().close();
@@ -438,8 +442,8 @@ public class PgStatement implements Statement, BaseStatement {
     }
     try {
       startTimer();
-      connection.getQueryExecutor().execute(queryToExecute, queryParameters, handler, maxrows,
-          fetchSize, flags);
+      await(connection.getQueryExecutor().execute(queryToExecute, queryParameters, handler, maxrows,
+          fetchSize, flags));
     } finally {
       killTimerTask();
     }
@@ -456,6 +460,7 @@ public class PgStatement implements Statement, BaseStatement {
         }
       }
     }
+	return CompletableFuture.completedFuture(null);
   }
 
   public void setCursorName(String name) throws SQLException {
@@ -1157,7 +1162,7 @@ public class PgStatement implements Statement, BaseStatement {
     }
 
     wantsGeneratedKeysOnce = true;
-    if (!executeCachedSql(sql, 0, columnNames)) {
+    if (!await(executeCachedSql(sql, 0, columnNames))) {
       // no resultset returned. What's a pity!
     }
     return getUpdateCount();
@@ -1185,7 +1190,7 @@ public class PgStatement implements Statement, BaseStatement {
     }
 
     wantsGeneratedKeysOnce = true;
-    return executeCachedSql(sql, 0, columnNames);
+    return await(executeCachedSql(sql, 0, columnNames));
   }
 
   public int getResultSetHoldability() throws SQLException {
