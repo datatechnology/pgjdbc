@@ -307,7 +307,7 @@ public class PgStatement implements Statement, BaseStatement {
     if (connection.getPreferQueryMode().compareTo(PreferQueryMode.EXTENDED) < 0) {
       flags |= QueryExecutor.QUERY_EXECUTE_AS_SIMPLE;
     }
-    await(execute(simpleQuery, null, flags));
+    execute(simpleQuery, null, flags);
     synchronized (this) {
       checkClosed();
       return CompletableFuture.completedFuture((result != null && result.getResultSet() != null));
@@ -362,10 +362,10 @@ public class PgStatement implements Statement, BaseStatement {
     return false;
   }
 
-  protected final CompletableFuture<Void> execute(CachedQuery cachedQuery, ParameterList queryParameters, int flags)
+  protected final void execute(CachedQuery cachedQuery, ParameterList queryParameters, int flags)
       throws SQLException {
     try {
-      await(executeInternal(cachedQuery, queryParameters, flags));
+      executeInternal(cachedQuery, queryParameters, flags);
     } catch (SQLException e) {
       // Don't retry composite queries as it might get partially executed
       if (cachedQuery.query.getSubqueries() != null
@@ -374,12 +374,11 @@ public class PgStatement implements Statement, BaseStatement {
       }
       cachedQuery.query.close();
       // Execute the query one more time
-      await(executeInternal(cachedQuery, queryParameters, flags));
+      executeInternal(cachedQuery, queryParameters, flags);
     }
-    return CompletableFuture.completedFuture(null);
   }
 
-  private CompletableFuture<Void> executeInternal(CachedQuery cachedQuery, ParameterList queryParameters, int flags)
+  private void executeInternal(CachedQuery cachedQuery, ParameterList queryParameters, int flags)
       throws SQLException {
     closeForNextExecution();
 
@@ -428,8 +427,8 @@ public class PgStatement implements Statement, BaseStatement {
       // thus sending a describe request.
       int flags2 = flags | QueryExecutor.QUERY_DESCRIBE_ONLY;
       StatementResultHandler handler2 = new StatementResultHandler();
-      await(connection.getQueryExecutor().execute(queryToExecute, queryParameters, handler2, 0, 0,
-          flags2));
+      connection.getQueryExecutor().execute(queryToExecute, queryParameters, handler2, 0, 0,
+          flags2);
       ResultWrapper result2 = handler2.getResults();
       if (result2 != null) {
         result2.getResultSet().close();
@@ -442,8 +441,8 @@ public class PgStatement implements Statement, BaseStatement {
     }
     try {
       startTimer();
-      await(connection.getQueryExecutor().execute(queryToExecute, queryParameters, handler, maxrows,
-          fetchSize, flags));
+      connection.getQueryExecutor().execute(queryToExecute, queryParameters, handler, maxrows,
+          fetchSize, flags);
     } finally {
       killTimerTask();
     }
@@ -460,7 +459,6 @@ public class PgStatement implements Statement, BaseStatement {
         }
       }
     }
-	return CompletableFuture.completedFuture(null);
   }
 
   public void setCursorName(String name) throws SQLException {

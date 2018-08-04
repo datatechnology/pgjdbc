@@ -137,7 +137,7 @@ public interface QueryExecutor extends TypeTransferModeRegistry {
  * @return 
    * @throws SQLException if query execution fails
    */
-  CompletableFuture<Void> execute(Query query, ParameterList parameters, ResultHandler handler, int maxRows,
+  void execute(Query query, ParameterList parameters, ResultHandler handler, int maxRows,
       int fetchSize, int flags) throws SQLException;
 
   /**

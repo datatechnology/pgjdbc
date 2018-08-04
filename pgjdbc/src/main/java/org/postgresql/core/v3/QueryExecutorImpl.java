@@ -268,7 +268,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     }
   }
 
-  public synchronized CompletableFuture<Void> execute(Query query, ParameterList parameters, ResultHandler handler,
+  public synchronized void execute(Query query, ParameterList parameters, ResultHandler handler,
       int maxRows, int fetchSize, int flags) throws SQLException {
     waitOnLock();
     if (LOGGER.isLoggable(Level.FINEST)) {
@@ -304,7 +304,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
         } else {
           sendSync();
         }
-        await(processResults(handler, flags));
+        processResults(handler, flags);
         estimatedReceiveBufferBytes = 0;
       } catch (PGBindException se) {
         // There are three causes of this error, an
@@ -322,7 +322,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
         // transaction in progress?
         //
         sendSync();
-        await(processResults(handler, flags));
+        processResults(handler, flags);
         estimatedReceiveBufferBytes = 0;
         handler
             .handleError(new PSQLException(GT.tr("Unable to bind parameter values for statement."),
@@ -341,7 +341,6 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       rollbackIfRequired(autosave, e);
     }
     
-    return CompletableFuture.completedFuture(null);
   }
 
   private boolean sendAutomaticSavepoint(Query query, int flags) throws IOException {
@@ -479,7 +478,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
         } else {
           sendSync();
         }
-        await(processResults(handler, flags));
+        processResults(handler, flags);
         estimatedReceiveBufferBytes = 0;
       }
     } catch (IOException e) {
@@ -564,7 +563,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     }
   }
 
-  public CompletableFuture<Void> doSubprotocolBegin() throws SQLException {
+  public void doSubprotocolBegin() throws SQLException {
     if (getTransactionState() == TransactionState.IDLE) {
 
       LOGGER.log(Level.FINEST, "Issuing BEGIN before fastpath or copy call.");
@@ -599,7 +598,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
         sendOneQuery(beginTransactionQuery, SimpleQuery.NO_PARAMETERS, 0, 0,
             QueryExecutor.QUERY_NO_METADATA);
         sendSync();
-        await(processResults(handler, 0));
+        processResults(handler, 0);
         estimatedReceiveBufferBytes = 0;
       } catch (IOException ioe) {
         throw new PSQLException(GT.tr("An I/O error occurred while sending to the backend."),
@@ -607,7 +606,6 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       }
     }
 
-    return CompletableFuture.completedFuture(null);
   }
 
   public ParameterList createFastpathParameters(int count) {
@@ -1205,7 +1203,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
           break;
         case 'S': // Parameter Status
           try {
-            await(receiveParameterStatus());
+            receiveParameterStatus();
           } catch (SQLException e) {
             error = e;
             endReceiving = true;
@@ -1301,7 +1299,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     if (disallowBatching || estimatedReceiveBufferBytes >= MAX_BUFFERED_RECV_BYTES) {
       LOGGER.log(Level.FINEST, "Forcing Sync, receive buffer full or batching disallowed");
       sendSync();
-      await(processResults(resultHandler, flags));
+      processResults(resultHandler, flags);
       estimatedReceiveBufferBytes = 0;
       if (batchHandler != null) {
         batchHandler.secureProgress();
@@ -1934,7 +1932,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     }
   }
 
-  protected CompletableFuture<Void> processResults(ResultHandler handler, int flags) throws IOException {
+  protected void processResults(ResultHandler handler, int flags) throws IOException {
     boolean noResults = (flags & QueryExecutor.QUERY_NO_RESULTS) != 0;
     boolean bothRowsAndStatus = (flags & QueryExecutor.QUERY_BOTH_ROWS_AND_STATUS) != 0;
 
@@ -1954,7 +1952,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       c = await(pgStream.receiveCharAsync());
       switch (c) {
         case 'A': // Asynchronous Notify
-          await(receiveAsyncNotify());
+          receiveAsyncNotify();
           break;
 
         case '1': // Parse Complete (response to Parse)
@@ -2336,8 +2334,6 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       }
 
     }
-    
-    return CompletableFuture.completedFuture(null);
   }
 
   /**
@@ -2373,7 +2369,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       sendExecute(portal.getQuery(), portal, fetchSize);
       sendSync();
 
-      await(processResults(handler, 0));
+      processResults(handler, 0);
       estimatedReceiveBufferBytes = 0;
     } catch (IOException e) {
       abort();
@@ -2413,7 +2409,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     return CompletableFuture.completedFuture(fields);
   }
 
-  private CompletableFuture<Void> receiveAsyncNotify() throws IOException {
+  private void receiveAsyncNotify() throws IOException {
     int msglen = await(pgStream.receiveInteger4Async());
     int pid = await(pgStream.receiveInteger4Async());
     String msg = pgStream.receiveString();
@@ -2423,7 +2419,6 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     if (LOGGER.isLoggable(Level.FINEST)) {
       LOGGER.log(Level.FINEST, " <=BE AsyncNotify({0},{1},{2})", new Object[]{pid, msg, param});
     }
-	return CompletableFuture.completedFuture(null);
   }
 
   private CompletableFuture<SQLException> receiveErrorResponse() throws IOException {
@@ -2584,7 +2579,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
 
         case 'S':
           // ParameterStatus
-          await(receiveParameterStatus());
+          receiveParameterStatus();
 
           break;
 
@@ -2598,7 +2593,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
         PSQLState.PROTOCOL_VIOLATION);
   }
 
-  public CompletableFuture<Void> receiveParameterStatus() throws IOException, SQLException {
+  public void receiveParameterStatus() throws IOException, SQLException {
     // ParameterStatus
     int l_len = await(pgStream.receiveInteger4Async());
     String name = pgStream.receiveString();
@@ -2645,7 +2640,6 @@ public class QueryExecutorImpl extends QueryExecutorBase {
             "The server''s standard_conforming_strings parameter was reported as {0}. The JDBC driver expected on or off.",
             value), PSQLState.CONNECTION_FAILURE);
       }
-      return CompletableFuture.completedFuture(null);
     }
 
     if ("TimeZone".equals(name)) {
@@ -2666,7 +2660,6 @@ public class QueryExecutorImpl extends QueryExecutorBase {
             PSQLState.PROTOCOL_VIOLATION);
       }
     }
-    return CompletableFuture.completedFuture(null);
   }
 
   public void setTimeZone(TimeZone timeZone) {
