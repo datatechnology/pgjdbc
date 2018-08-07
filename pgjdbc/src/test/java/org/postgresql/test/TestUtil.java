@@ -521,10 +521,10 @@ public class TestUtil {
    */
   public static void dropTable(Connection con, String table) throws SQLException {
     Statement stmt = con.createStatement();
-    try {
+//    try {
       String sql = "DROP TABLE " + table + " CASCADE ";
       stmt.executeUpdate(sql);
-    } catch (SQLException ex) {
+//    } catch (SQLException ex) {
       // Since every create table issues a drop table
       // it's easy to get a table doesn't exist error.
       // we want to ignore these, but if we're in a
@@ -532,7 +532,7 @@ public class TestUtil {
       //if (!con.getAutoCommit()) {
         //throw ex;
       //}
-    }
+//    }
   }
 
   /*
