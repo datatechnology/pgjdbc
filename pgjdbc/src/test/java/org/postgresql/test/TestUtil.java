@@ -529,9 +529,9 @@ public class TestUtil {
       // it's easy to get a table doesn't exist error.
       // we want to ignore these, but if we're in a
       // transaction then we've got trouble
-      if (!con.getAutoCommit()) {
-        throw ex;
-      }
+      //if (!con.getAutoCommit()) {
+        //throw ex;
+      //}
     }
   }
 
