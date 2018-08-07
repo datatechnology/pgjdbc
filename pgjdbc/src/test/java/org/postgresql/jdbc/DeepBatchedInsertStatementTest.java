@@ -54,7 +54,7 @@ public class DeepBatchedInsertStatementTest extends BaseTest4 {
      * Generally recommended with batch updates. By default we run all tests in
      * this test case with autoCommit disabled.
      */
-    con.setAutoCommit(false);
+//    con.setAutoCommit(false);
   }
 
   // Tear down the fixture for this test case.

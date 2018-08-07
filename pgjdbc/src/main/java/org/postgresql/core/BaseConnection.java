@@ -48,7 +48,7 @@ public interface BaseConnection extends PGConnection, Connection {
  * @return 
    * @throws SQLException if something goes wrong.
    */
-  void execSQLUpdate(String s) throws SQLException;
+  CompletableFuture<Void> execSQLUpdate(String s) throws SQLException;
 
   /**
    * Get the QueryExecutor implementation for this connection.

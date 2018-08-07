@@ -137,7 +137,7 @@ public interface QueryExecutor extends TypeTransferModeRegistry {
  * @return 
    * @throws SQLException if query execution fails
    */
-  void execute(Query query, ParameterList parameters, ResultHandler handler, int maxRows,
+  CompletableFuture<Void> execute(Query query, ParameterList parameters, ResultHandler handler, int maxRows,
       int fetchSize, int flags) throws SQLException;
 
   /**
@@ -155,9 +155,10 @@ public interface QueryExecutor extends TypeTransferModeRegistry {
    * @param fetchSize if QUERY_FORWARD_CURSOR is set, the preferred number of rows to retrieve
    *        before suspending
    * @param flags a combination of QUERY_* flags indicating how to handle the query.
+ * @return 
    * @throws SQLException if query execution fails
    */
-  void execute(Query[] queries, ParameterList[] parameterLists, BatchResultHandler handler, int maxRows,
+  CompletableFuture<Void> execute(Query[] queries, ParameterList[] parameterLists, BatchResultHandler handler, int maxRows,
       int fetchSize, int flags) throws SQLException;
 
   /**

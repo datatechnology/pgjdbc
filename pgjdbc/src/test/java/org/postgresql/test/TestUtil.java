@@ -378,7 +378,11 @@ public class TestUtil {
     try {
       // Drop the table
       dropTable(con, table);
-
+    } catch(SQLException e) {
+    	
+    }
+    
+    	try {
       // Now create the table
       String sql = "CREATE TABLE " + table + " (" + columns + ")";
 
