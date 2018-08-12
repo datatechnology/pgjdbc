@@ -6,8 +6,14 @@
 package org.postgresql.jdbc;
 
 import org.postgresql.largeobject.LargeObject;
+import org.postgresql.util.GT;
+import org.postgresql.util.PSQLException;
+import org.postgresql.util.PSQLState;
 
 import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import static com.ea.async.Async.await;
 
 public class PgBlob extends AbstractBlobClob implements java.sql.Blob {
 
@@ -18,14 +24,22 @@ public class PgBlob extends AbstractBlobClob implements java.sql.Blob {
   public synchronized java.io.InputStream getBinaryStream(long pos, long length)
       throws SQLException {
     checkFreed();
-    LargeObject subLO = getLo(false).copy();
-    addSubLO(subLO);
-    if (pos > Integer.MAX_VALUE) {
-      subLO.seek64(pos - 1, LargeObject.SEEK_SET);
-    } else {
-      subLO.seek((int) pos - 1, LargeObject.SEEK_SET);
-    }
-    return subLO.getInputStream(length);
+	try {
+		LargeObject subLO = getLo(false).get().copy();
+		addSubLO(subLO);
+	    if (pos > Integer.MAX_VALUE) {
+	      subLO.seek64(pos - 1, LargeObject.SEEK_SET).get();
+	    } else {
+	      subLO.seek((int) pos - 1, LargeObject.SEEK_SET).get();
+	    }
+	    return subLO.getInputStream(length);
+	} catch (InterruptedException e) {
+		throw new PSQLException(GT.tr("Unexpected error get pg blog to database."),
+				PSQLState.UNEXPECTED_ERROR, e);
+	} catch (ExecutionException e) {
+		throw new PSQLException(GT.tr("Unexpected error get pg blog to database."),
+				PSQLState.UNEXPECTED_ERROR, e);
+	}
   }
 
   public synchronized int setBytes(long pos, byte[] bytes) throws SQLException {
@@ -35,8 +49,16 @@ public class PgBlob extends AbstractBlobClob implements java.sql.Blob {
   public synchronized int setBytes(long pos, byte[] bytes, int offset, int len)
       throws SQLException {
     assertPosition(pos);
-    getLo(true).seek((int) (pos - 1));
-    getLo(true).write(bytes, offset, len);
+    try {
+		getLo(true).get().seek((int) (pos - 1));
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	}
+    try {
+		getLo(true).get().write(bytes, offset, len);
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	}
     return len;
   }
 }

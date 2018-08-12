@@ -364,7 +364,7 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
         pgStream.flush();
 
         // Now get the response from the backend, one of N, E, S.
-        int beresp = pgStream.receiveChar();
+        int beresp = await(pgStream.receiveChar());
         switch (beresp) {
             case 'E':
                 LOGGER.log(Level.FINEST, " <=BE SSLError");
@@ -464,7 +464,7 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
         try {
             boolean c = true;
             while (c) {
-                int beresp = await(pgStream.receiveCharAsync());
+                int beresp = await(pgStream.receiveChar());
 
                 switch (beresp) {
                     case 'E':
@@ -474,7 +474,7 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
                         // The most common one to be thrown here is:
                         // "User authentication failed"
                         //
-                        int l_elen = await(pgStream.receiveInteger4Async());
+                        int l_elen = await(pgStream.receiveInteger4());
                         if (l_elen > 30000) {
                             // if the error length is > than 30000 we assume this is really a v2 protocol
                             // server, so trigger fallback.
@@ -482,22 +482,22 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
                         }
 
                         ServerErrorMessage errorMsg =
-                                new ServerErrorMessage(pgStream.receiveErrorString(l_elen - 4));
+                                new ServerErrorMessage(await(pgStream.receiveErrorString(l_elen - 4)));
                         LOGGER.log(Level.FINEST, " <=BE ErrorMessage({0})", errorMsg);
                         throw new PSQLException(errorMsg);
 
                     case 'R':
                         // Authentication request.
                         // Get the message length
-                        int l_msgLen = await(pgStream.receiveInteger4Async());
+                        int l_msgLen = await(pgStream.receiveInteger4());
 
                         // Get the type of request
-                        int areq = await(pgStream.receiveInteger4Async());
+                        int areq = await(pgStream.receiveInteger4());
 
                         // Process the request.
                         switch (areq) {
                             case AUTH_REQ_MD5: {
-                                byte[] md5Salt = pgStream.receive(4);
+                                byte[] md5Salt = await(pgStream.receive(4));
                                 if (LOGGER.isLoggable(Level.FINEST)) {
                                     LOGGER.log(Level.FINEST, " <=BE AuthenticationReqMD5(salt={0})", Utils.toHexString(md5Salt));
                                 }
@@ -622,7 +622,7 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
                                 /*
                                  * Only called for SSPI, as GSS is handled by an inner loop in MakeGSS.
                                  */
-                                sspiClient.continueSSPI(l_msgLen - 8);
+                                await(sspiClient.continueSSPI(l_msgLen - 8));
                                 break;
 
                             case AUTH_REQ_SASL:
@@ -630,7 +630,7 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
 
                                 //#if mvn.project.property.postgresql.jdbc.spec >= "JDBC4.2"
                                 scramAuthenticator = new org.postgresql.jre8.sasl.ScramAuthenticator(user, password, pgStream);
-                                scramAuthenticator.processServerMechanismsAndInit();
+                                await(scramAuthenticator.processServerMechanismsAndInit());
                                 scramAuthenticator.sendScramClientFirstMessage();
                                 //#else
                                 if (true) {
@@ -643,11 +643,11 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
 
                             //#if mvn.project.property.postgresql.jdbc.spec >= "JDBC4.2"
                             case AUTH_REQ_SASL_CONTINUE:
-                                scramAuthenticator.processServerFirstMessage(l_msgLen - 4 - 4);
+                                await(scramAuthenticator.processServerFirstMessage(l_msgLen - 4 - 4));
                                 break;
 
                             case AUTH_REQ_SASL_FINAL:
-                                scramAuthenticator.verifyServerSignature(l_msgLen - 4 - 4);
+                                await(scramAuthenticator.verifyServerSignature(l_msgLen - 4 - 4));
                                 break;
                             //#endif
 

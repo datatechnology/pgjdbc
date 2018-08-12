@@ -18,6 +18,10 @@ import java.io.OutputStream;
 import java.sql.Blob;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+
+import static com.ea.async.Async.await;
 
 /**
  * This class holds all of the methods common to both Blobs and Clobs.
@@ -85,46 +89,76 @@ public abstract class AbstractBlobClob {
     }
     if (len > Integer.MAX_VALUE) {
       if (support64bit) {
-        getLo(true).truncate64(len);
+        try {
+			getLo(true).get().truncate64(len);
+		} catch (InterruptedException | ExecutionException e) {
+			throw new SQLException(e);
+		}
       } else {
         throw new PSQLException(GT.tr("PostgreSQL LOBs can only index to: {0}", Integer.MAX_VALUE),
             PSQLState.INVALID_PARAMETER_VALUE);
       }
     } else {
-      getLo(true).truncate((int) len);
+      try {
+		getLo(true).get().truncate((int) len);
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	}
     }
   }
 
   public synchronized long length() throws SQLException {
     checkFreed();
     if (support64bit) {
-      return getLo(false).size64();
+    	try {
+			return getLo(false).get().size64().get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new SQLException(e);
+		}
     } else {
-      return getLo(false).size();
+    	try {
+			return (long)getLo(false).get().size().get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new SQLException(e);
+		}
     }
   }
 
   public synchronized byte[] getBytes(long pos, int length) throws SQLException {
     assertPosition(pos);
-    getLo(false).seek((int) (pos - 1), LargeObject.SEEK_SET);
-    return getLo(false).read(length);
+    try {
+		getLo(false).get().seek((int) (pos - 1), LargeObject.SEEK_SET);
+		return getLo(false).get().read(length).get();
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	}
+    
   }
 
 
   public synchronized InputStream getBinaryStream() throws SQLException {
     checkFreed();
-    LargeObject subLO = getLo(false).copy();
-    addSubLO(subLO);
-    subLO.seek(0, LargeObject.SEEK_SET);
-    return subLO.getInputStream();
+	try {
+		LargeObject subLO = getLo(false).get().copy();
+		addSubLO(subLO);
+	    subLO.seek(0, LargeObject.SEEK_SET);
+	    return subLO.getInputStream();
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	}
+    
   }
 
   public synchronized OutputStream setBinaryStream(long pos) throws SQLException {
     assertPosition(pos);
-    LargeObject subLO = getLo(true).copy();
-    addSubLO(subLO);
-    subLO.seek((int) (pos - 1));
-    return subLO.getOutputStream();
+	try {
+		LargeObject subLO = getLo(true).get().copy();
+		addSubLO(subLO);
+	    subLO.seek((int) (pos - 1));
+	    return subLO.getOutputStream();
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	}
   }
 
   /**
@@ -172,7 +206,11 @@ public abstract class AbstractBlobClob {
     private int numBytes = BUFFER_SIZE;
 
     LOIterator(long start) throws SQLException {
-      getLo(false).seek((int) start);
+      try {
+		getLo(false).get().seek((int) start);
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	}
     }
 
     public boolean hasNext() throws SQLException {
@@ -180,7 +218,11 @@ public abstract class AbstractBlobClob {
       if (idx < numBytes) {
         result = true;
       } else {
-        numBytes = getLo(false).read(buffer, 0, BUFFER_SIZE);
+        try {
+			numBytes = getLo(false).get().read(buffer, 0, BUFFER_SIZE).get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new SQLException(e);
+		}
         idx = 0;
         result = (numBytes > 0);
       }
@@ -248,30 +290,38 @@ public abstract class AbstractBlobClob {
     }
   }
 
-  protected synchronized LargeObject getLo(boolean forWrite) throws SQLException {
+  protected synchronized CompletableFuture<LargeObject> getLo(boolean forWrite) throws SQLException {
 
 
     if (this.currentLo != null) {
       if (forWrite && !currentLoIsWriteable) {
         // Reopen the stream in read-write, at the same pos.
-        int currentPos = this.currentLo.tell();
+        int currentPos = await(this.currentLo.tell());
 
         LargeObjectManager lom = conn.getLargeObjectAPI();
-        LargeObject newLo = lom.open(oid, LargeObjectManager.READWRITE);
-        this.subLOs.add(this.currentLo);
-        this.currentLo = newLo;
+		try {
+			LargeObject newLo = lom.open(oid, LargeObjectManager.READWRITE);
+			this.subLOs.add(this.currentLo);
+	        this.currentLo = newLo;
 
-        if (currentPos != 0) {
-          this.currentLo.seek(currentPos);
-        }
+	        if (currentPos != 0) {
+	          this.currentLo.seek(currentPos);
+	        }
+		} catch (InterruptedException | ExecutionException e) {
+			throw new SQLException(e);
+		}
       }
 
-      return this.currentLo;
+      return CompletableFuture.completedFuture(this.currentLo);
     }
     LargeObjectManager lom = conn.getLargeObjectAPI();
-    currentLo = lom.open(oid, forWrite ? LargeObjectManager.READWRITE : LargeObjectManager.READ);
+    try {
+		currentLo = lom.open(oid, forWrite ? LargeObjectManager.READWRITE : LargeObjectManager.READ);
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	}
     currentLoIsWriteable = forWrite;
-    return currentLo;
+    return CompletableFuture.completedFuture(currentLo);
   }
 
   protected void addSubLO(LargeObject subLO) {

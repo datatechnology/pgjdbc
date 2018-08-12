@@ -13,6 +13,7 @@ import org.postgresql.util.PSQLState;
 import java.io.IOException;
 import java.io.InputStream;
 import java.sql.SQLException;
+import java.util.concurrent.ExecutionException;
 
 /**
  * InputStream for reading from a PostgreSQL COPY TO STDOUT operation
@@ -29,9 +30,11 @@ public class PGCopyInputStream extends InputStream implements CopyOut {
    * @param connection database connection to use for copying (protocol version 3 required)
    * @param sql COPY TO STDOUT statement
    * @throws SQLException if initializing the operation fails
+ * @throws ExecutionException 
+ * @throws InterruptedException 
    */
-  public PGCopyInputStream(PGConnection connection, String sql) throws SQLException {
-    this(connection.getCopyAPI().copyOut(sql));
+  public PGCopyInputStream(PGConnection connection, String sql) throws SQLException, InterruptedException, ExecutionException {
+    this(connection.getCopyAPI().copyOut(sql).get());
   }
 
   /**

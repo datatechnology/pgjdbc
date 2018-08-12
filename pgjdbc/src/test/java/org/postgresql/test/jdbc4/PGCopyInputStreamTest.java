@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.concurrent.ExecutionException;
 
 public class PGCopyInputStreamTest {
   private Connection _conn;
@@ -49,8 +50,13 @@ public class PGCopyInputStreamTest {
   public void testReadBytesCorrectlyHandlesEof() throws SQLException, IOException {
     insertSomeData();
 
-    sut = new PGCopyInputStream((PGConnection) _conn,
-        "COPY cpinstreamtest (i) TO STDOUT WITH " + copyParams);
+    try {
+		sut = new PGCopyInputStream((PGConnection) _conn,
+		    "COPY cpinstreamtest (i) TO STDOUT WITH " + copyParams);
+	} catch (InterruptedException | ExecutionException e) {
+		// TODO Auto-generated catch block
+		e.printStackTrace();
+	}
 
     byte[] buf = new byte[100]; // large enough to read everything on the next step
     assertTrue(sut.read(buf) > 0);
@@ -62,8 +68,13 @@ public class PGCopyInputStreamTest {
   public void testReadBytesCorrectlyReadsDataInChunks() throws SQLException, IOException {
     insertSomeData();
 
-    sut = new PGCopyInputStream((PGConnection) _conn,
-        "COPY (select i from cpinstreamtest order by i asc) TO STDOUT WITH " + copyParams);
+    try {
+		sut = new PGCopyInputStream((PGConnection) _conn,
+		    "COPY (select i from cpinstreamtest order by i asc) TO STDOUT WITH " + copyParams);
+	} catch (InterruptedException | ExecutionException e) {
+		// TODO Auto-generated catch block
+		e.printStackTrace();
+	}
 
     byte[] buf = new byte[2]; // small enough to read in multiple chunks
     StringBuilder result = new StringBuilder(100);
@@ -81,8 +92,13 @@ public class PGCopyInputStreamTest {
   public void testStreamCanBeClosedAfterReadUp() throws SQLException, IOException {
     insertSomeData();
 
-    sut = new PGCopyInputStream((PGConnection) _conn,
-        "COPY (select i from cpinstreamtest order by i asc) TO STDOUT WITH " + copyParams);
+    try {
+		sut = new PGCopyInputStream((PGConnection) _conn,
+		    "COPY (select i from cpinstreamtest order by i asc) TO STDOUT WITH " + copyParams);
+	} catch (InterruptedException | ExecutionException e) {
+		// TODO Auto-generated catch block
+		e.printStackTrace();
+	}
 
     byte[] buff = new byte[100];
     while (sut.read(buff) > 0) {

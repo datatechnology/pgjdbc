@@ -71,6 +71,7 @@ import java.util.TimeZone;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -741,7 +742,7 @@ public class PgConnection implements BaseConnection {
 		return this.autoCommit;
 	}
 
-	private void executeTransactionCommand(Query query) throws SQLException {
+	private CompletableFuture<Void> executeTransactionCommand(Query query) throws SQLException {
 		int flags = QueryExecutor.QUERY_NO_METADATA | QueryExecutor.QUERY_NO_RESULTS
 				| QueryExecutor.QUERY_SUPPRESS_BEGIN;
 		if (prepareThreshold == 0) {
@@ -749,7 +750,7 @@ public class PgConnection implements BaseConnection {
 		}
 
 		try {
-			getQueryExecutor().execute(query, null, new TransactionCommandHandler(), 0, 0, flags);
+			await(getQueryExecutor().execute(query, null, new TransactionCommandHandler(), 0, 0, flags));
 		} catch (SQLException e) {
 			// Don't retry composite queries as it might get partially executed
 			if (query.getSubqueries() != null || !queryExecutor.willHealOnRetry(e)) {
@@ -757,8 +758,10 @@ public class PgConnection implements BaseConnection {
 			}
 			query.close();
 			// retry
-			getQueryExecutor().execute(query, null, new TransactionCommandHandler(), 0, 0, flags);
+			await(getQueryExecutor().execute(query, null, new TransactionCommandHandler(), 0, 0, flags));
 		}
+		
+		return CompletableFuture.completedFuture(null);
 	}
 
 	public void commit() throws SQLException {
@@ -770,7 +773,11 @@ public class PgConnection implements BaseConnection {
 		}
 
 		if (queryExecutor.getTransactionState() != TransactionState.IDLE) {
-			executeTransactionCommand(commitQuery);
+			try {
+				executeTransactionCommand(commitQuery).get();
+			} catch (InterruptedException | ExecutionException e) {
+				throw new SQLException(e);
+			}
 		}
 	}
 
@@ -982,17 +989,17 @@ public class PgConnection implements BaseConnection {
 	}
 
 	@Override
-	public PGNotification[] getNotifications() throws SQLException {
+	public CompletableFuture<PGNotification[]> getNotifications() throws SQLException {
 		return getNotifications(-1);
 	}
 
 	@Override
-	public PGNotification[] getNotifications(int timeoutMillis) throws SQLException {
+	public CompletableFuture<PGNotification[]> getNotifications(int timeoutMillis) throws SQLException {
 		checkClosed();
-		getQueryExecutor().processNotifies(timeoutMillis);
+		await(getQueryExecutor().processNotifies(timeoutMillis));
 		// Backwards-compatibility hand-holding.
 		PGNotification[] notifications = queryExecutor.getNotifications();
-		return (notifications.length == 0 ? null : notifications);
+		return CompletableFuture.completedFuture(notifications.length == 0 ? null : notifications);
 	}
 
 	/**

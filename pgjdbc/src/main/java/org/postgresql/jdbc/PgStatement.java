@@ -329,7 +329,7 @@ public class PgStatement implements Statement, BaseStatement {
     }
   }
 
-  public boolean executeWithFlags(int flags) throws SQLException {
+  public CompletableFuture<Boolean> executeWithFlags(int flags) throws SQLException {
     checkClosed();
     throw new PSQLException(GT.tr("Can''t use executeWithFlags(int) on a Statement."),
         PSQLState.WRONG_OBJECT_TYPE);

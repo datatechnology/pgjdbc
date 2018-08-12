@@ -364,18 +364,13 @@ public class TestUtil {
 	/*
 	 * Helper - creates a test table for use by a test
 	 */
-	public static void createTable(Connection con, String table, String columns, boolean withOids) {
+	public static void createTable(Connection con, String table, String columns, boolean withOids) throws SQLException {
+		Statement st = con.createStatement();
+
+		// Drop the table
+		dropTable(con, table);
 
 		try {
-			// Drop the table
-			dropTable(con, table);
-		} catch (SQLException e) {
-
-		}
-
-		Statement st = null;
-		try {
-			st = con.createStatement();
 			// Now create the table
 			String sql = "CREATE TABLE " + table + " (" + columns + ")";
 
@@ -384,10 +379,8 @@ public class TestUtil {
 			}
 
 			st.executeUpdate(sql);
-		} catch (SQLException e) {
 		} finally {
-			if (st != null)
-				closeQuietly(st);
+			closeQuietly(st);
 		}
 	}
 
@@ -522,20 +515,21 @@ public class TestUtil {
 	/*
 	 * Helper - drops a table
 	 */
-	public static void dropTable(Connection con, String table) throws SQLException {
-		Statement stmt = con.createStatement();
-		// try {
-		String sql = "DROP TABLE " + table + " CASCADE ";
-		stmt.executeUpdate(sql);
-		// } catch (SQLException ex) {
-		// Since every create table issues a drop table
-		// it's easy to get a table doesn't exist error.
-		// we want to ignore these, but if we're in a
-		// transaction then we've got trouble
-		// if (!con.getAutoCommit()) {
-		// throw ex;
-		// }
-		// }
+	public static void dropTable(Connection con, String table) {
+
+		try {
+			Statement stmt = con.createStatement();
+			String sql = "DROP TABLE " + table + " CASCADE ";
+			stmt.executeUpdate(sql);
+		} catch (SQLException ex) {
+			// Since every create table issues a drop table
+			// it's easy to get a table doesn't exist error.
+			// we want to ignore these, but if we're in a
+			// transaction then we've got trouble
+			// if (!con.getAutoCommit()) {
+			// throw ex;
+			// }
+		}
 	}
 
 	/*

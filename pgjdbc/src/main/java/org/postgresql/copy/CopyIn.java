@@ -6,6 +6,7 @@
 package org.postgresql.copy;
 
 import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Copy bulk data from client into a PostgreSQL table very fast.
@@ -38,5 +39,5 @@ public interface CopyIn extends CopyOperation {
    * @return number of updated rows for server 8.2 or newer (see getHandledRowCount())
    * @throws SQLException if the operation fails.
    */
-  long endCopy() throws SQLException;
+  CompletableFuture<Long> endCopy() throws SQLException;
 }

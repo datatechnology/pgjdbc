@@ -167,9 +167,10 @@ public interface QueryExecutor extends TypeTransferModeRegistry {
    * @param cursor the cursor to fetch from
    * @param handler the handler to feed results to
    * @param fetchSize the preferred number of rows to retrieve before suspending
+ * @return 
    * @throws SQLException if query execution fails
    */
-  void fetch(ResultCursor cursor, ResultHandler handler, int fetchSize) throws SQLException;
+  CompletableFuture<Void> fetch(ResultCursor cursor, ResultHandler handler, int fetchSize) throws SQLException;
 
   /**
    * Create an unparameterized Query object suitable for execution by this QueryExecutor. The
@@ -216,10 +217,11 @@ public interface QueryExecutor extends TypeTransferModeRegistry {
    * notifications off of the network buffers. The notification retrieval in ProtocolConnection
    * cannot do this as it is prone to deadlock, so the higher level caller must be responsible which
    * requires exposing this method.
+ * @return 
    *
    * @throws SQLException if and error occurs while fetching notifications
    */
-  void processNotifies() throws SQLException;
+  CompletableFuture<Void> processNotifies() throws SQLException;
 
   /**
    * Prior to attempting to retrieve notifications, we need to pull any recently received
@@ -228,9 +230,10 @@ public interface QueryExecutor extends TypeTransferModeRegistry {
    * requires exposing this method. This variant supports blocking for the given time in millis.
    *
    * @param timeoutMillis number of milliseconds to block for
+ * @return 
    * @throws SQLException if and error occurs while fetching notifications
    */
-  void processNotifies(int timeoutMillis) throws SQLException;
+  CompletableFuture<Void> processNotifies(int timeoutMillis) throws SQLException;
 
   //
   // Fastpath interface.
@@ -266,7 +269,7 @@ public interface QueryExecutor extends TypeTransferModeRegistry {
    *         and results substitutes for a fast-path function call.
    */
   @Deprecated
-  byte[] fastpathCall(int fnid, ParameterList params, boolean suppressBegin) throws SQLException;
+  CompletableFuture<byte[]> fastpathCall(int fnid, ParameterList params, boolean suppressBegin) throws SQLException;
 
   /**
    * Issues a COPY FROM STDIN / COPY TO STDOUT statement and returns handler for associated
@@ -278,7 +281,7 @@ public interface QueryExecutor extends TypeTransferModeRegistry {
    * @return handler for associated operation
    * @throws SQLException when initializing the given query fails
    */
-  CopyOperation startCopy(String sql, boolean suppressBegin) throws SQLException;
+  CompletableFuture<CopyOperation> startCopy(String sql, boolean suppressBegin) throws SQLException;
 
   /**
    * @return the version of the implementation
