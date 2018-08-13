@@ -92,7 +92,7 @@ public class CopyLargeFileTest {
     try {
       in = new StrangeInputStream(new FileInputStream("target/buffer.txt"));
       long size = copyAPI.copyIn(
-          "COPY pgjdbc_issue366_test_data(data_text_id, glossary_text_id, value) FROM STDIN", in);
+          "COPY pgjdbc_issue366_test_data(data_text_id, glossary_text_id, value) FROM STDIN", in).get();
       assertEquals(BufferGenerator.ROW_COUNT, size);
     } finally {
       if (in != null) {

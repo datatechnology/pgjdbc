@@ -45,8 +45,6 @@ import java.io.IOException;
 import java.lang.ref.PhantomReference;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
-import java.net.Socket;
-import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.sql.SQLException;
 import java.sql.SQLWarning;
@@ -61,11 +59,14 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+
+import static com.ea.async.Async.await;
 
 /**
  * QueryExecutor implementation for the V3 protocol.
@@ -267,7 +268,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     }
   }
 
-  public synchronized void execute(Query query, ParameterList parameters, ResultHandler handler,
+  public synchronized CompletableFuture<Void> execute(Query query, ParameterList parameters, ResultHandler handler,
       int maxRows, int fetchSize, int flags) throws SQLException {
     waitOnLock();
     if (LOGGER.isLoggable(Level.FINEST)) {
@@ -303,7 +304,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
         } else {
           sendSync();
         }
-        processResults(handler, flags);
+        await(processResults(handler, flags));
         estimatedReceiveBufferBytes = 0;
       } catch (PGBindException se) {
         // There are three causes of this error, an
@@ -321,7 +322,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
         // transaction in progress?
         //
         sendSync();
-        processResults(handler, flags);
+        await(processResults(handler, flags));
         estimatedReceiveBufferBytes = 0;
         handler
             .handleError(new PSQLException(GT.tr("Unable to bind parameter values for statement."),
@@ -337,8 +338,10 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     try {
       handler.handleCompletion();
     } catch (SQLException e) {
-      rollbackIfRequired(autosave, e);
+      await(rollbackIfRequired(autosave, e));
     }
+    
+    return CompletableFuture.completedFuture(null);
   }
 
   private boolean sendAutomaticSavepoint(Query query, int flags) throws IOException {
@@ -362,14 +365,14 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     return false;
   }
 
-  private void rollbackIfRequired(boolean autosave, SQLException e) throws SQLException {
+  private CompletableFuture<Void> rollbackIfRequired(boolean autosave, SQLException e) throws SQLException {
     if (autosave
         && getTransactionState() == TransactionState.FAILED
         && (getAutoSave() == AutoSave.ALWAYS || willHealOnRetry(e))) {
       try {
         // ROLLBACK and AUTOSAVE are executed as simple always to overcome "statement no longer exists S_xx"
-        execute(restoreToAutoSave, SimpleQuery.NO_PARAMETERS, new ResultHandlerDelegate(null),
-            1, 0, QUERY_NO_RESULTS | QUERY_NO_METADATA | QUERY_EXECUTE_AS_SIMPLE);
+        await(execute(restoreToAutoSave, SimpleQuery.NO_PARAMETERS, new ResultHandlerDelegate(null),
+            1, 0, QUERY_NO_RESULTS | QUERY_NO_METADATA | QUERY_EXECUTE_AS_SIMPLE));
       } catch (SQLException e2) {
         // That's O(N), sorry
         e.setNextException(e2);
@@ -428,7 +431,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
   private static final int MAX_BUFFERED_RECV_BYTES = 64000;
   private static final int NODATA_QUERY_RESPONSE_SIZE_BYTES = 250;
 
-  public synchronized void execute(Query[] queries, ParameterList[] parameterLists,
+  public synchronized CompletableFuture<Void> execute(Query[] queries, ParameterList[] parameterLists,
       BatchResultHandler batchHandler, int maxRows, int fetchSize, int flags) throws SQLException {
     waitOnLock();
     if (LOGGER.isLoggable(Level.FINEST)) {
@@ -476,7 +479,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
         } else {
           sendSync();
         }
-        processResults(handler, flags);
+        await(processResults(handler, flags));
         estimatedReceiveBufferBytes = 0;
       }
     } catch (IOException e) {
@@ -489,8 +492,10 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     try {
       handler.handleCompletion();
     } catch (SQLException e) {
-      rollbackIfRequired(autosave, e);
+      await(rollbackIfRequired(autosave, e));
     }
+    
+    return CompletableFuture.completedFuture(null);
   }
 
   private ResultHandler sendQueryPreamble(final ResultHandler delegateHandler, int flags)
@@ -545,11 +550,11 @@ public class QueryExecutorImpl extends QueryExecutorBase {
   // Fastpath
   //
 
-  public synchronized byte[] fastpathCall(int fnid, ParameterList parameters, boolean suppressBegin)
+  public synchronized CompletableFuture<byte[]> fastpathCall(int fnid, ParameterList parameters, boolean suppressBegin)
       throws SQLException {
     waitOnLock();
     if (!suppressBegin) {
-      doSubprotocolBegin();
+      await(doSubprotocolBegin());
     }
     try {
       sendFastpathCall(fnid, (SimpleParameterList) parameters);
@@ -561,7 +566,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     }
   }
 
-  public void doSubprotocolBegin() throws SQLException {
+  public CompletableFuture<Void> doSubprotocolBegin() throws SQLException {
     if (getTransactionState() == TransactionState.IDLE) {
 
       LOGGER.log(Level.FINEST, "Issuing BEGIN before fastpath or copy call.");
@@ -596,7 +601,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
         sendOneQuery(beginTransactionQuery, SimpleQuery.NO_PARAMETERS, 0, 0,
             QueryExecutor.QUERY_NO_METADATA);
         sendSync();
-        processResults(handler, 0);
+        await(processResults(handler, 0));
         estimatedReceiveBufferBytes = 0;
       } catch (IOException ioe) {
         throw new PSQLException(GT.tr("An I/O error occurred while sending to the backend."),
@@ -604,6 +609,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       }
     }
 
+    return CompletableFuture.completedFuture(null);
   }
 
   public ParameterList createFastpathParameters(int count) {
@@ -655,8 +661,8 @@ public class QueryExecutorImpl extends QueryExecutorBase {
   }
 
   // Just for API compatibility with previous versions.
-  public synchronized void processNotifies() throws SQLException {
-    processNotifies(-1);
+  public synchronized CompletableFuture<Void> processNotifies() throws SQLException {
+    return processNotifies(-1);
   }
 
   /**
@@ -664,11 +670,11 @@ public class QueryExecutorImpl extends QueryExecutorBase {
    *                      when =0, block forever
    *                      when &lt; 0, don't block
    */
-  public synchronized void processNotifies(int timeoutMillis) throws SQLException {
+  public synchronized CompletableFuture<Void> processNotifies(int timeoutMillis) throws SQLException {
     waitOnLock();
     // Asynchronous notifies only arrive when we are not in a transaction
     if (getTransactionState() != TransactionState.IDLE) {
-      return;
+      return CompletableFuture.completedFuture(null);
     }
 
     if (hasNotifications()) {
@@ -694,21 +700,21 @@ public class QueryExecutorImpl extends QueryExecutorBase {
         /*if (useTimeout && timeoutMillis >= 0) {
           setSocketTimeout(timeoutMillis);
         }*/
-        int c = pgStream.receiveChar();
+        int c = await(pgStream.receiveChar());
 
         /*if (useTimeout && timeoutMillis >= 0) {
           setSocketTimeout(0); // Don't timeout after first char
         }*/
         switch (c) {
           case 'A': // Asynchronous Notify
-            receiveAsyncNotify();
+            await(receiveAsyncNotify());
             timeoutMillis = -1;
             continue;
           case 'E':
             // Error Response (response to pretty much everything; backend then skips until Sync)
-            throw receiveErrorResponse();
+            throw await(receiveErrorResponse());
           case 'N': // Notice Response (warnings / info)
-            SQLWarning warning = receiveNoticeResponse();
+            SQLWarning warning = await(receiveNoticeResponse());
             addWarning(warning);
             /*
             if (useTimeout) {
@@ -735,6 +741,8 @@ public class QueryExecutorImpl extends QueryExecutorBase {
         setSocketTimeout(oldTimeout);
       }*/
     }
+    
+    return CompletableFuture.completedFuture(null);
   }
 
   private void setSocketTimeout(int millis) throws PSQLException {
@@ -750,21 +758,21 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     }*/
   }
 
-  private byte[] receiveFastpathResult() throws IOException, SQLException {
+  private CompletableFuture<byte[]> receiveFastpathResult() throws IOException, SQLException {
     boolean endQuery = false;
     SQLException error = null;
     byte[] returnValue = null;
 
     while (!endQuery) {
-      int c = pgStream.receiveChar();
+      int c = await(pgStream.receiveChar());
       switch (c) {
         case 'A': // Asynchronous Notify
-          receiveAsyncNotify();
+          await(receiveAsyncNotify());
           break;
 
         case 'E':
           // Error Response (response to pretty much everything; backend then skips until Sync)
-          SQLException newError = receiveErrorResponse();
+          SQLException newError = await(receiveErrorResponse());
           if (error == null) {
             error = newError;
           } else {
@@ -774,24 +782,24 @@ public class QueryExecutorImpl extends QueryExecutorBase {
           break;
 
         case 'N': // Notice Response (warnings / info)
-          SQLWarning warning = receiveNoticeResponse();
+          SQLWarning warning = await(receiveNoticeResponse());
           addWarning(warning);
           break;
 
         case 'Z': // Ready For Query (eventual response to Sync)
-          receiveRFQ();
+          await(receiveRFQ());
           endQuery = true;
           break;
 
         case 'V': // FunctionCallResponse
-          int msgLen = pgStream.receiveInteger4();
-          int valueLen = pgStream.receiveInteger4();
+          int msgLen = await(pgStream.receiveInteger4());
+          int valueLen = await(pgStream.receiveInteger4());
 
           LOGGER.log(Level.FINEST, " <=BE FunctionCallResponse({0} bytes)", valueLen);
 
           if (valueLen != -1) {
             byte[] buf = new byte[valueLen];
-            pgStream.receive(buf, 0, valueLen);
+            await(pgStream.receive(buf, 0, valueLen));
             returnValue = buf;
           }
 
@@ -809,7 +817,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       throw error;
     }
 
-    return returnValue;
+    return CompletableFuture.completedFuture(returnValue);
   }
 
   //
@@ -823,7 +831,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
    * @return CopyIn or CopyOut operation object
    * @throws SQLException on failure
    */
-  public synchronized CopyOperation startCopy(String sql, boolean suppressBegin)
+  public synchronized CompletableFuture<CopyOperation> startCopy(String sql, boolean suppressBegin)
       throws SQLException {
     waitOnLock();
     if (!suppressBegin) {
@@ -856,18 +864,19 @@ public class QueryExecutorImpl extends QueryExecutorBase {
    * @throws SQLException on locking failure
    * @throws IOException on database connection failure
    */
-  private synchronized void initCopy(CopyOperationImpl op) throws SQLException, IOException {
+  private synchronized CompletableFuture<Void> initCopy(CopyOperationImpl op) throws SQLException, IOException {
     pgStream.receiveInteger4(); // length not used
-    int rowFormat = pgStream.receiveChar();
-    int numFields = pgStream.receiveInteger2();
+    int rowFormat = await(pgStream.receiveChar());
+    int numFields = await(pgStream.receiveInteger2());
     int[] fieldFormats = new int[numFields];
 
     for (int i = 0; i < numFields; i++) {
-      fieldFormats[i] = pgStream.receiveInteger2();
+      fieldFormats[i] = await(pgStream.receiveInteger2());
     }
 
     lock(op);
     op.init(this, rowFormat, fieldFormats);
+    return CompletableFuture.completedFuture(null);
   }
 
   /**
@@ -876,7 +885,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
    * @param op the copy operation presumably currently holding lock on this connection
    * @throws SQLException on any additional failure
    */
-  public void cancelCopy(CopyOperationImpl op) throws SQLException {
+  public CompletableFuture<Void> cancelCopy(CopyOperationImpl op) throws SQLException {
     if (!hasLock(op)) {
       throw new PSQLException(GT.tr("Tried to cancel an inactive copy operation"),
           PSQLState.OBJECT_NOT_IN_STATE);
@@ -897,7 +906,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
           pgStream.flush();
           do {
             try {
-              processCopyResults(op, true); // discard rest of input
+              await(processCopyResults(op, true)); // discard rest of input
             } catch (SQLException se) { // expected error response to failing copy
               errors++;
               if (error != null) {
@@ -941,6 +950,8 @@ public class QueryExecutorImpl extends QueryExecutorBase {
             PSQLState.COMMUNICATION_ERROR, error);
       }
     }
+    
+    return CompletableFuture.completedFuture(null);
   }
 
   /**
@@ -950,7 +961,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
    * @return number of rows updated for server versions 8.2 or newer
    * @throws SQLException on failure
    */
-  public synchronized long endCopy(CopyOperationImpl op) throws SQLException {
+  public synchronized CompletableFuture<Long> endCopy(CopyOperationImpl op) throws SQLException {
     if (!hasLock(op)) {
       throw new PSQLException(GT.tr("Tried to end inactive copy"), PSQLState.OBJECT_NOT_IN_STATE);
     }
@@ -963,9 +974,9 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       pgStream.flush();
 
       do {
-        processCopyResults(op, true);
+        await(processCopyResults(op, true));
       } while (hasLock(op));
-      return op.getHandledRowCount();
+      return CompletableFuture.completedFuture(op.getHandledRowCount());
     } catch (IOException ioe) {
       throw new PSQLException(GT.tr("Database connection failed when ending copy"),
           PSQLState.CONNECTION_FAILURE, ioe);
@@ -1050,7 +1061,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
    * @throws SQLException in case of misuse
    * @throws IOException from the underlying connection
    */
-  CopyOperationImpl processCopyResults(CopyOperationImpl op, boolean block)
+  CompletableFuture<CopyOperation> processCopyResults(CopyOperationImpl op, boolean block)
       throws SQLException, IOException {
 
     boolean endReceiving = false;
@@ -1069,7 +1080,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       // until we actually are done with the copy.
       //
       if (!block) {
-        int c = pgStream.peekChar();
+        int c = await(pgStream.peekChar());
         if (c == 'C') {
           // CommandComplete
           LOGGER.log(Level.FINEST, " <=BE CommandStatus, Ignored until CopyDone");
@@ -1077,26 +1088,26 @@ public class QueryExecutorImpl extends QueryExecutorBase {
         }
       }
 
-      int c = pgStream.receiveChar();
+      int c = await(pgStream.receiveChar());
       switch (c) {
 
         case 'A': // Asynchronous Notify
 
           LOGGER.log(Level.FINEST, " <=BE Asynchronous Notification while copying");
 
-          receiveAsyncNotify();
+          await(receiveAsyncNotify());
           break;
 
         case 'N': // Notice Response
 
           LOGGER.log(Level.FINEST, " <=BE Notification while copying");
 
-          addWarning(receiveNoticeResponse());
+          addWarning(await(receiveNoticeResponse()));
           break;
 
         case 'C': // Command Complete
 
-          String status = receiveCommandStatus();
+          String status = await(receiveCommandStatus());
 
           try {
             if (op == null) {
@@ -1114,7 +1125,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
 
         case 'E': // ErrorMessage (expected response to CopyFail)
 
-          error = receiveErrorResponse();
+          error = await(receiveErrorResponse());
           // We've received the error and we now expect to receive
           // Ready for query, but we must block because it might still be
           // on the wire and not here yet.
@@ -1131,7 +1142,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
           }
 
           op = new CopyInImpl();
-          initCopy(op);
+          await(initCopy(op));
           endReceiving = true;
           break;
 
@@ -1145,7 +1156,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
           }
 
           op = new CopyOutImpl();
-          initCopy(op);
+          await(initCopy(op));
           endReceiving = true;
           break;
 
@@ -1159,7 +1170,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
           }
 
           op = new CopyDualImpl();
-          initCopy(op);
+          await(initCopy(op));
           endReceiving = true;
           break;
 
@@ -1167,8 +1178,8 @@ public class QueryExecutorImpl extends QueryExecutorBase {
 
           LOGGER.log(Level.FINEST, " <=BE CopyData");
 
-          len = pgStream.receiveInteger4() - 4;
-          byte[] buf = pgStream.receive(len);
+          len = await(pgStream.receiveInteger4()) - 4;
+          byte[] buf = await(pgStream.receive(len));
           if (op == null) {
             error = new PSQLException(GT.tr("Got CopyData without an active copy operation"),
                 PSQLState.OBJECT_NOT_IN_STATE);
@@ -1186,9 +1197,9 @@ public class QueryExecutorImpl extends QueryExecutorBase {
 
           LOGGER.log(Level.FINEST, " <=BE CopyDone");
 
-          len = pgStream.receiveInteger4() - 4;
+          len = await(pgStream.receiveInteger4()) - 4;
           if (len > 0) {
-            pgStream.receive(len); // not in specification; should never appear
+            await(pgStream.receive(len)); // not in specification; should never appear
           }
 
           if (!(op instanceof CopyOut)) {
@@ -1201,7 +1212,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
           break;
         case 'S': // Parameter Status
           try {
-            receiveParameterStatus();
+            await(receiveParameterStatus());
           } catch (SQLException e) {
             error = e;
             endReceiving = true;
@@ -1210,7 +1221,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
 
         case 'Z': // ReadyForQuery: After FE:CopyDone => BE:CommandComplete
 
-          receiveRFQ();
+          await(receiveRFQ());
           if (hasLock(op)) {
             unlock(op);
           }
@@ -1223,13 +1234,13 @@ public class QueryExecutorImpl extends QueryExecutorBase {
         case 'T': // Row Description (response to Describe)
           LOGGER.log(Level.FINEST, " <=BE RowDescription (during copy ignored)");
 
-          skipMessage();
+          await(skipMessage());
           break;
 
         case 'D': // DataRow
           LOGGER.log(Level.FINEST, " <=BE DataRow (during copy ignored)");
 
-          skipMessage();
+          await(skipMessage());
           break;
 
         default:
@@ -1251,7 +1262,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       throw errors;
     }
 
-    return op;
+    return CompletableFuture.completedFuture(op);
   }
 
   /*
@@ -1260,7 +1271,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
    *
    * See the comments above MAX_BUFFERED_RECV_BYTES's declaration for details.
    */
-  private void flushIfDeadlockRisk(Query query, boolean disallowBatching,
+  private CompletableFuture<Void> flushIfDeadlockRisk(Query query, boolean disallowBatching,
       ResultHandler resultHandler,
       BatchResultHandler batchHandler,
       final int flags) throws IOException {
@@ -1297,13 +1308,13 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     if (disallowBatching || estimatedReceiveBufferBytes >= MAX_BUFFERED_RECV_BYTES) {
       LOGGER.log(Level.FINEST, "Forcing Sync, receive buffer full or batching disallowed");
       sendSync();
-      processResults(resultHandler, flags);
+      await(processResults(resultHandler, flags));
       estimatedReceiveBufferBytes = 0;
       if (batchHandler != null) {
         batchHandler.secureProgress();
       }
     }
-
+    return CompletableFuture.completedFuture(null);
   }
 
   /*
@@ -1930,7 +1941,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     }
   }
 
-  protected void processResults(ResultHandler handler, int flags) throws IOException {
+  protected CompletableFuture<Void> processResults(ResultHandler handler, int flags) throws IOException {
     boolean noResults = (flags & QueryExecutor.QUERY_NO_RESULTS) != 0;
     boolean bothRowsAndStatus = (flags & QueryExecutor.QUERY_BOTH_ROWS_AND_STATUS) != 0;
 
@@ -1947,14 +1958,14 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     boolean doneAfterRowDescNoData = false;
 
     while (!endQuery) {
-      c = pgStream.receiveChar();
+      c = await(pgStream.receiveChar());
       switch (c) {
         case 'A': // Asynchronous Notify
-          receiveAsyncNotify();
+          await(receiveAsyncNotify());
           break;
 
         case '1': // Parse Complete (response to Parse)
-          pgStream.receiveInteger4(); // len, discarded
+          await(pgStream.receiveInteger4()); // len, discarded
 
           SimpleQuery parsedQuery = pendingParseQueue.removeFirst();
           String parsedStatementName = parsedQuery.getStatementName();
@@ -1964,7 +1975,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
           break;
 
         case 't': { // ParameterDescription
-          pgStream.receiveInteger4(); // len, discarded
+          await(pgStream.receiveInteger4()); // len, discarded
 
           LOGGER.log(Level.FINEST, " <=BE ParameterDescription");
 
@@ -1976,10 +1987,10 @@ public class QueryExecutorImpl extends QueryExecutorBase {
           // This might differ from query.getStatementName if the query was re-prepared
           String origStatementName = describeData.statementName;
 
-          int numParams = pgStream.receiveInteger2();
+          int numParams = await(pgStream.receiveInteger2());
 
           for (int i = 1; i <= numParams; i++) {
-            int typeOid = pgStream.receiveInteger4();
+            int typeOid = await(pgStream.receiveInteger4());
             params.setResolvedType(i, typeOid);
           }
 
@@ -2003,7 +2014,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
         }
 
         case '2': // Bind Complete (response to Bind)
-          pgStream.receiveInteger4(); // len, discarded
+          await(pgStream.receiveInteger4()); // len, discarded
 
           Portal boundPortal = pendingBindQueue.removeFirst();
           LOGGER.log(Level.FINEST, " <=BE BindComplete [{0}]", boundPortal);
@@ -2012,12 +2023,12 @@ public class QueryExecutorImpl extends QueryExecutorBase {
           break;
 
         case '3': // Close Complete (response to Close)
-          pgStream.receiveInteger4(); // len, discarded
+          await(pgStream.receiveInteger4()); // len, discarded
           LOGGER.log(Level.FINEST, " <=BE CloseComplete");
           break;
 
         case 'n': // No Data (response to Describe)
-          pgStream.receiveInteger4(); // len, discarded
+          await(pgStream.receiveInteger4()); // len, discarded
           LOGGER.log(Level.FINEST, " <=BE NoData");
 
           pendingDescribePortalQueue.removeFirst();
@@ -2040,7 +2051,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
           // nb: this appears *instead* of CommandStatus.
           // Must be a SELECT if we suspended, so don't worry about it.
 
-          pgStream.receiveInteger4(); // len, discarded
+          await(pgStream.receiveInteger4()); // len, discarded
           LOGGER.log(Level.FINEST, " <=BE PortalSuspended");
 
 
@@ -2062,7 +2073,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
 
         case 'C': { // Command Status (end of Execute)
           // Handle status.
-          String status = receiveCommandStatus();
+          String status = await(receiveCommandStatus());
           if (isFlushCacheOnDeallocate()
               && (status.startsWith("DEALLOCATE ALL") || status.startsWith("DISCARD ALL"))) {
             deallocateEpoch++;
@@ -2141,7 +2152,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
         case 'D': // Data Transfer (ongoing Execute response)
           byte[][] tuple = null;
           try {
-            tuple = pgStream.receiveTupleV3();
+            tuple = await(pgStream.receiveTupleV3());
           } catch (OutOfMemoryError oome) {
             if (!noResults) {
               handler.handleError(
@@ -2178,7 +2189,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
 
         case 'E':
           // Error Response (response to pretty much everything; backend then skips until Sync)
-          SQLException error = receiveErrorResponse();
+          SQLException error = await(receiveErrorResponse());
           handler.handleError(error);
           if (willHealViaReparse(error)) {
             // prepared statement ... is not valid kind of error
@@ -2194,7 +2205,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
           break;
 
         case 'I': { // Empty Query (end of Execute)
-          pgStream.receiveInteger4();
+          await(pgStream.receiveInteger4());
 
           LOGGER.log(Level.FINEST, " <=BE EmptyQuery");
 
@@ -2208,13 +2219,13 @@ public class QueryExecutorImpl extends QueryExecutorBase {
         }
 
         case 'N': // Notice Response
-          SQLWarning warning = receiveNoticeResponse();
+          SQLWarning warning = await(receiveNoticeResponse());
           handler.handleWarning(warning);
           break;
 
         case 'S': // Parameter Status
           try {
-            receiveParameterStatus();
+            await(receiveParameterStatus());
           } catch (SQLException e) {
             handler.handleError(e);
             endQuery = true;
@@ -2222,7 +2233,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
           break;
 
         case 'T': // Row Description (response to Describe)
-          Field[] fields = receiveFields();
+          Field[] fields = await(receiveFields());
           tuples = new ArrayList<byte[][]>();
 
           SimpleQuery query = pendingDescribePortalQueue.peekFirst();
@@ -2242,7 +2253,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
           break;
 
         case 'Z': // Ready For Query (eventual response to Sync)
-          receiveRFQ();
+          await(receiveRFQ());
           if (!pendingExecuteQueue.isEmpty() && pendingExecuteQueue.peekFirst().asSimple) {
             tuples = null;
 
@@ -2262,13 +2273,13 @@ public class QueryExecutorImpl extends QueryExecutorBase {
             }
           }
           endQuery = true;
+          
 
           // Reset the statement name of Parses that failed.
           while (!pendingParseQueue.isEmpty()) {
             SimpleQuery failedQuery = pendingParseQueue.removeFirst();
             failedQuery.unprepare();
           }
-
           pendingParseQueue.clear(); // No more ParseComplete messages expected.
           // Pending "describe" requests might be there in case of error
           // If that is the case, reset "described" status, so the statement is properly
@@ -2303,13 +2314,13 @@ public class QueryExecutorImpl extends QueryExecutorBase {
           pgStream.sendChar(0);
           pgStream.flush();
           sendSync(); // send sync message
-          skipMessage(); // skip the response message
+          await(skipMessage()); // skip the response message
           break;
 
         case 'H': // CopyOutResponse
           LOGGER.log(Level.FINEST, " <=BE CopyOutResponse");
 
-          skipMessage();
+          await(skipMessage());
           // In case of CopyOutResponse, we cannot abort data transfer,
           // so just throw an error and ignore CopyData messages
           handler.handleError(
@@ -2318,12 +2329,12 @@ public class QueryExecutorImpl extends QueryExecutorBase {
           break;
 
         case 'c': // CopyDone
-          skipMessage();
+          await(skipMessage());
           LOGGER.log(Level.FINEST, " <=BE CopyDone");
           break;
 
         case 'd': // CopyData
-          skipMessage();
+          await(skipMessage());
           LOGGER.log(Level.FINEST, " <=BE CopyData");
           break;
 
@@ -2332,19 +2343,22 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       }
 
     }
+    
+    return CompletableFuture.completedFuture(null);
   }
 
   /**
    * Ignore the response message by reading the message length and skipping over those bytes in the
    * communication stream.
    */
-  private void skipMessage() throws IOException {
-    int l_len = pgStream.receiveInteger4();
+  private CompletableFuture<Void> skipMessage() throws IOException {
+    int l_len = await(pgStream.receiveInteger4());
     // skip l_len-4 (length includes the 4 bytes for message length itself
     pgStream.skip(l_len - 4);
+    return CompletableFuture.completedFuture(null);
   }
 
-  public synchronized void fetch(ResultCursor cursor, ResultHandler handler, int fetchSize)
+  public synchronized CompletableFuture<Void> fetch(ResultCursor cursor, ResultHandler handler, int fetchSize)
       throws SQLException {
     waitOnLock();
     final Portal portal = (Portal) cursor;
@@ -2367,7 +2381,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       sendExecute(portal.getQuery(), portal, fetchSize);
       sendSync();
 
-      processResults(handler, 0);
+      await(processResults(handler, 0));
       estimatedReceiveBufferBytes = 0;
     } catch (IOException e) {
       abort();
@@ -2377,26 +2391,29 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     }
 
     handler.handleCompletion();
+    return CompletableFuture.completedFuture(null);
   }
 
   /*
    * Receive the field descriptions from the back end.
    */
-  private Field[] receiveFields() throws IOException {
-    int l_msgSize = pgStream.receiveInteger4();
-    int size = pgStream.receiveInteger2();
+  private CompletableFuture<Field[]> receiveFields() throws IOException {
+    int l_msgSize = await(pgStream.receiveInteger4());
+    int size = await(pgStream.receiveInteger2());
     Field[] fields = new Field[size];
 
     LOGGER.log(Level.FINEST, " <=BE RowDescription({0})", size);
 
     for (int i = 0; i < fields.length; i++) {
-      String columnLabel = pgStream.receiveString();
-      int tableOid = pgStream.receiveInteger4();
-      short positionInTable = (short) pgStream.receiveInteger2();
-      int typeOid = pgStream.receiveInteger4();
-      int typeLength = pgStream.receiveInteger2();
-      int typeModifier = pgStream.receiveInteger4();
-      int formatType = pgStream.receiveInteger2();
+      String columnLabel = await(pgStream.receiveString());
+      int tableOid = await(pgStream.receiveInteger4());
+      
+      int iPositionInTable = await(pgStream.receiveInteger2());
+      short positionInTable = (short) iPositionInTable;
+      int typeOid = await(pgStream.receiveInteger4());
+      int typeLength = await(pgStream.receiveInteger2());
+      int typeModifier = await(pgStream.receiveInteger4());
+      int formatType = await(pgStream.receiveInteger2());
       fields[i] = new Field(columnLabel,
           typeOid, typeLength, typeModifier, tableOid, positionInTable);
       fields[i].setFormat(formatType);
@@ -2404,29 +2421,30 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       LOGGER.log(Level.FINEST, "        {0}", fields[i]);
     }
 
-    return fields;
+    return CompletableFuture.completedFuture(fields);
   }
 
-  private void receiveAsyncNotify() throws IOException {
-    int msglen = pgStream.receiveInteger4();
-    int pid = pgStream.receiveInteger4();
-    String msg = pgStream.receiveString();
-    String param = pgStream.receiveString();
+  private CompletableFuture<Void> receiveAsyncNotify() throws IOException {
+    int msglen = await(pgStream.receiveInteger4());
+    int pid = await(pgStream.receiveInteger4());
+    String msg = await(pgStream.receiveString());
+    String param = await(pgStream.receiveString());
     addNotification(new org.postgresql.core.Notification(msg, pid, param));
 
     if (LOGGER.isLoggable(Level.FINEST)) {
       LOGGER.log(Level.FINEST, " <=BE AsyncNotify({0},{1},{2})", new Object[]{pid, msg, param});
     }
+	return CompletableFuture.completedFuture(null);
   }
 
-  private SQLException receiveErrorResponse() throws IOException {
+  private CompletableFuture<SQLException> receiveErrorResponse() throws IOException {
     // it's possible to get more than one error message for a query
     // see libpq comments wrt backend closing a connection
     // so, append messages to a string buffer and keep processing
     // check at the bottom to see if we need to throw an exception
 
-    int elen = pgStream.receiveInteger4();
-    EncodingPredictor.DecodeResult totalMessage = pgStream.receiveErrorString(elen - 4);
+    int elen = await(pgStream.receiveInteger4());
+    EncodingPredictor.DecodeResult totalMessage = await(pgStream.receiveErrorString(elen - 4));
     ServerErrorMessage errorMsg = new ServerErrorMessage(totalMessage);
 
     if (LOGGER.isLoggable(Level.FINEST)) {
@@ -2439,31 +2457,31 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     } else {
       error.initCause(transactionFailCause);
     }
-    return error;
+    return CompletableFuture.completedFuture(error);
   }
 
-  private SQLWarning receiveNoticeResponse() throws IOException {
-    int nlen = pgStream.receiveInteger4();
-    ServerErrorMessage warnMsg = new ServerErrorMessage(pgStream.receiveString(nlen - 4));
+  private CompletableFuture<SQLWarning> receiveNoticeResponse() throws IOException {
+    int nlen = await(pgStream.receiveInteger4());
+    ServerErrorMessage warnMsg = new ServerErrorMessage(await(pgStream.receiveString(nlen - 4)));
 
     if (LOGGER.isLoggable(Level.FINEST)) {
       LOGGER.log(Level.FINEST, " <=BE NoticeResponse({0})", warnMsg.toString());
     }
 
-    return new PSQLWarning(warnMsg);
+    return CompletableFuture.completedFuture(new PSQLWarning(warnMsg));
   }
 
-  private String receiveCommandStatus() throws IOException {
+  private CompletableFuture<String> receiveCommandStatus() throws IOException {
     // TODO: better handle the msg len
-    int l_len = pgStream.receiveInteger4();
+    int l_len = await(pgStream.receiveInteger4());
     // read l_len -5 bytes (-4 for l_len and -1 for trailing \0)
-    String status = pgStream.receiveString(l_len - 5);
+    String status = await(pgStream.receiveString(l_len - 5));
     // now read and discard the trailing \0
-    pgStream.receiveChar(); // Receive(1) would allocate new byte[1], so avoid it
+    await(pgStream.receiveChar()); // Receive(1) would allocate new byte[1], so avoid it
 
     LOGGER.log(Level.FINEST, " <=BE CommandStatus({0})", status);
 
-    return status;
+    return CompletableFuture.completedFuture(status);
   }
 
   private void interpretCommandStatus(String status, ResultHandler handler) {
@@ -2504,12 +2522,13 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     handler.handleCommandStatus(status, countAsInt, oid);
   }
 
-  private void receiveRFQ() throws IOException {
-    if (pgStream.receiveInteger4() != 5) {
+  private CompletableFuture<Void> receiveRFQ() throws IOException {
+    if (await(pgStream.receiveInteger4()) != 5) {
       throw new IOException("unexpected length of ReadyForQuery message");
     }
 
-    char tStatus = (char) pgStream.receiveChar();
+    int iStatus = await(pgStream.receiveChar());
+    char tStatus = (char) iStatus;
     LOGGER.log(Level.FINEST, " <=BE ReadyForQuery({0})", tStatus);
 
     // Update connection state.
@@ -2529,6 +2548,8 @@ public class QueryExecutorImpl extends QueryExecutorBase {
         throw new IOException(
             "unexpected transaction state in ReadyForQuery message: " + (int) tStatus);
     }
+    
+    return CompletableFuture.completedFuture(null);
   }
 
   @Override
@@ -2537,25 +2558,25 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     pgStream.sendInteger4(4);
   }
 
-  public void readStartupMessages() throws IOException, SQLException {
+  public CompletableFuture<Void> readStartupMessages() throws IOException, SQLException {
     for (int i = 0; i < 1000; i++) {
-      int beresp = pgStream.receiveChar();
+      int beresp = await(pgStream.receiveChar());
       switch (beresp) {
         case 'Z':
-          receiveRFQ();
+          await(receiveRFQ());
           // Ready For Query; we're done.
-          return;
+          return CompletableFuture.completedFuture(null);
 
         case 'K':
           // BackendKeyData
-          int l_msgLen = pgStream.receiveInteger4();
+          int l_msgLen = await(pgStream.receiveInteger4());
           if (l_msgLen != 12) {
             throw new PSQLException(GT.tr("Protocol error.  Session setup failed."),
                 PSQLState.PROTOCOL_VIOLATION);
           }
 
-          int pid = pgStream.receiveInteger4();
-          int ckey = pgStream.receiveInteger4();
+          int pid = await(pgStream.receiveInteger4());
+          int ckey = await(pgStream.receiveInteger4());
 
           if (LOGGER.isLoggable(Level.FINEST)) {
             LOGGER.log(Level.FINEST, " <=BE BackendKeyData(pid={0},ckey={1})", new Object[]{pid, ckey});
@@ -2566,16 +2587,16 @@ public class QueryExecutorImpl extends QueryExecutorBase {
 
         case 'E':
           // Error
-          throw receiveErrorResponse();
+          throw await(receiveErrorResponse());
 
         case 'N':
           // Warning
-          addWarning(receiveNoticeResponse());
+          addWarning(await(receiveNoticeResponse()));
           break;
 
         case 'S':
           // ParameterStatus
-          receiveParameterStatus();
+          await(receiveParameterStatus());
 
           break;
 
@@ -2587,13 +2608,15 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     }
     throw new PSQLException(GT.tr("Protocol error.  Session setup failed."),
         PSQLState.PROTOCOL_VIOLATION);
+    
+    
   }
 
-  public void receiveParameterStatus() throws IOException, SQLException {
+  public CompletableFuture<Void> receiveParameterStatus() throws IOException, SQLException {
     // ParameterStatus
-    int l_len = pgStream.receiveInteger4();
-    String name = pgStream.receiveString();
-    String value = pgStream.receiveString();
+    int l_len = await(pgStream.receiveInteger4());
+    String name = await(pgStream.receiveString());
+    String value = await(pgStream.receiveString());
 
     if (LOGGER.isLoggable(Level.FINEST)) {
       LOGGER.log(Level.FINEST, " <=BE ParameterStatus({0} = {1})", new Object[]{name, value});
@@ -2636,7 +2659,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
             "The server''s standard_conforming_strings parameter was reported as {0}. The JDBC driver expected on or off.",
             value), PSQLState.CONNECTION_FAILURE);
       }
-      return;
+      return CompletableFuture.completedFuture(null);
     }
 
     if ("TimeZone".equals(name)) {
@@ -2657,6 +2680,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
             PSQLState.PROTOCOL_VIOLATION);
       }
     }
+    return CompletableFuture.completedFuture(null);
   }
 
   public void setTimeZone(TimeZone timeZone) {

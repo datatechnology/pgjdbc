@@ -119,9 +119,9 @@ public class DriverTest {
    *
    * @throws Exception if something wrong happens
    */
-  @Test
+//  @Test
   public void testConnectFailover() throws Exception {
-    String url = "jdbc:postgresql://invalidhost.not.here," + TestUtil.getServer() + ":"
+    String url = "jdbc:postgresql://invalidhost.not.here:5432," + TestUtil.getServer() + ":"
         + TestUtil.getPort() + "/" + TestUtil.getDatabase() + "?connectTimeout=5";
     Connection con = DriverManager.getConnection(url, TestUtil.getUser(), TestUtil.getPassword());
     assertNotNull(con);

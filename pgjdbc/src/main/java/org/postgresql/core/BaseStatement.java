@@ -11,6 +11,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Driver-internal statement interface. Application code should not use this interface.
@@ -50,7 +51,7 @@ public interface BaseStatement extends PGStatement, Statement {
    * @return true if there is a result set
    * @throws SQLException if something goes wrong.
    */
-  boolean executeWithFlags(String p_sql, int flags) throws SQLException;
+  CompletableFuture<Boolean> executeWithFlags(String p_sql, int flags) throws SQLException;
 
   /**
    * Execute a query, passing additional query flags.
@@ -61,7 +62,7 @@ public interface BaseStatement extends PGStatement, Statement {
    * @return true if there is a result set
    * @throws SQLException if something goes wrong.
    */
-  boolean executeWithFlags(CachedQuery cachedQuery, int flags) throws SQLException;
+  CompletableFuture<Boolean> executeWithFlags(CachedQuery cachedQuery, int flags) throws SQLException;
 
   /**
    * Execute a prepared query, passing additional query flags.
@@ -71,5 +72,5 @@ public interface BaseStatement extends PGStatement, Statement {
    * @return true if there is a result set
    * @throws SQLException if something goes wrong.
    */
-  boolean executeWithFlags(int flags) throws SQLException;
+  CompletableFuture<Boolean> executeWithFlags(int flags) throws SQLException;
 }

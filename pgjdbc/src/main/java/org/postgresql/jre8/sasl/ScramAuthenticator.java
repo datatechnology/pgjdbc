@@ -19,10 +19,13 @@ import com.ongres.scram.common.exception.ScramParseException;
 import com.ongres.scram.common.exception.ScramServerErrorException;
 import com.ongres.scram.common.stringprep.StringPreparations;
 
+import static com.ea.async.Async.await;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -56,12 +59,12 @@ public class ScramAuthenticator {
     this.pgStream = pgStream;
   }
 
-  public void processServerMechanismsAndInit() throws IOException, PSQLException {
+  public CompletableFuture<Void> processServerMechanismsAndInit() throws IOException, PSQLException {
     List<String> mechanisms = new ArrayList<>();
     do {
-      mechanisms.add(pgStream.receiveString());
-    } while (pgStream.peekChar() != 0);
-    int c = pgStream.receiveChar();
+      mechanisms.add(await(pgStream.receiveString()));
+    } while (await(pgStream.peekChar()) != 0);
+    int c = await(pgStream.receiveChar());
     assert c == 0;
     if (mechanisms.size() < 1) {
       throw new PSQLException(
@@ -86,6 +89,8 @@ public class ScramAuthenticator {
 
     scramSession =
         scramClient.scramSession("*");   // Real username is ignored by server, uses startup one
+    
+    return CompletableFuture.completedFuture(null);
   }
 
   public void sendScramClientFirstMessage() throws IOException {
@@ -106,8 +111,8 @@ public class ScramAuthenticator {
     );
   }
 
-  public void processServerFirstMessage(int length) throws IOException, PSQLException {
-    String serverFirstMessage = pgStream.receiveString(length);
+  public CompletableFuture<Void> processServerFirstMessage(int length) throws IOException, PSQLException {
+    String serverFirstMessage = await(pgStream.receiveString(length));
     LOGGER.log(Level.FINEST, " <=BE AuthenticationSASLContinue( {0} )", serverFirstMessage);
 
     try {
@@ -134,10 +139,12 @@ public class ScramAuthenticator {
         clientFinalMessageBytes.length,
         s -> s.send(clientFinalMessageBytes)
     );
+    
+    return CompletableFuture.completedFuture(null);
   }
 
-  public void verifyServerSignature(int length) throws IOException, PSQLException {
-    String serverFinalMessage = pgStream.receiveString(length);
+  public CompletableFuture<Void> verifyServerSignature(int length) throws IOException, PSQLException {
+    String serverFinalMessage = await(pgStream.receiveString(length));
     LOGGER.log(Level.FINEST, " <=BE AuthenticationSASLFinal( {0} )", serverFinalMessage);
 
     try {
@@ -162,5 +169,6 @@ public class ScramAuthenticator {
           e
       );
     }
+    return CompletableFuture.completedFuture(null);
   }
 }

@@ -11,6 +11,8 @@ import org.postgresql.util.GT;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 /**
  * OutputStream for buffered input into a PostgreSQL COPY FROM STDIN operation
@@ -27,8 +29,10 @@ public class PGCopyOutputStream extends OutputStream implements CopyIn {
    * @param connection database connection to use for copying (protocol version 3 required)
    * @param sql        COPY FROM STDIN statement
    * @throws SQLException if initializing the operation fails
+ * @throws ExecutionException 
+ * @throws InterruptedException 
    */
-  public PGCopyOutputStream(PGConnection connection, String sql) throws SQLException {
+  public PGCopyOutputStream(PGConnection connection, String sql) throws SQLException, InterruptedException, ExecutionException {
     this(connection, sql, CopyManager.DEFAULT_BUFFER_SIZE);
   }
 
@@ -39,10 +43,12 @@ public class PGCopyOutputStream extends OutputStream implements CopyIn {
    * @param sql        COPY FROM STDIN statement
    * @param bufferSize try to send this many bytes at a time
    * @throws SQLException if initializing the operation fails
+ * @throws ExecutionException 
+ * @throws InterruptedException 
    */
   public PGCopyOutputStream(PGConnection connection, String sql, int bufferSize)
-      throws SQLException {
-    this(connection.getCopyAPI().copyIn(sql), bufferSize);
+      throws SQLException, InterruptedException, ExecutionException {
+    this(connection.getCopyAPI().copyIn(sql).get(), bufferSize);
   }
 
   /**
@@ -161,12 +167,12 @@ public class PGCopyOutputStream extends OutputStream implements CopyIn {
     op.flushCopy();
   }
 
-  public long endCopy() throws SQLException {
+  public CompletableFuture<Long> endCopy() throws SQLException {
     if (at > 0) {
       op.writeToCopy(copyBuffer, 0, at);
     }
     op.endCopy();
-    return getHandledRowCount();
+    return CompletableFuture.completedFuture(getHandledRowCount());
   }
 
   public long getHandledRowCount() {

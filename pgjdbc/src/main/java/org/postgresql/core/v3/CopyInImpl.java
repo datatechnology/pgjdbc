@@ -11,6 +11,7 @@ import org.postgresql.util.PSQLException;
 import org.postgresql.util.PSQLState;
 
 import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Anticipated flow of a COPY FROM STDIN operation:
@@ -39,7 +40,7 @@ public class CopyInImpl extends CopyOperationImpl implements CopyIn {
     queryExecutor.flushCopy(this);
   }
 
-  public long endCopy() throws SQLException {
+  public CompletableFuture<Long> endCopy() throws SQLException {
     return queryExecutor.endCopy(this);
   }
 

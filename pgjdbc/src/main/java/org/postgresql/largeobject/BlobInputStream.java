@@ -8,6 +8,7 @@ package org.postgresql.largeobject;
 import java.io.IOException;
 import java.io.InputStream;
 import java.sql.SQLException;
+import java.util.concurrent.ExecutionException;
 
 /**
  * This is an implementation of an InputStream from a large object.
@@ -88,7 +89,11 @@ public class BlobInputStream extends InputStream {
         return -1;
       }
       if (buffer == null || bpos >= buffer.length) {
-        buffer = lo.read(bsize);
+        try {
+			buffer = lo.read(bsize).get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new IOException(e);
+		}
         bpos = 0;
       }
 

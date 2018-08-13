@@ -22,7 +22,9 @@ import java.io.OutputStream;
 import java.io.Reader;
 import java.io.Writer;
 import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
 
+import static com.ea.async.Async.await;
 /**
  * API for PostgreSQL COPY bulk data transfer
  */
@@ -44,10 +46,10 @@ public class CopyManager {
     this.connection = connection;
   }
 
-  public CopyIn copyIn(String sql) throws SQLException {
-    CopyOperation op = queryExecutor.startCopy(sql, connection.getAutoCommit());
+  public CompletableFuture<CopyIn> copyIn(String sql) throws SQLException {
+    CopyOperation op = await(queryExecutor.startCopy(sql, connection.getAutoCommit()));
     if (op == null || op instanceof CopyIn) {
-      return (CopyIn) op;
+      return CompletableFuture.completedFuture((CopyIn) op);
     } else {
       op.cancelCopy();
       throw new PSQLException(GT.tr("Requested CopyIn but got {0}", op.getClass().getName()),
@@ -55,10 +57,10 @@ public class CopyManager {
     }
   }
 
-  public CopyOut copyOut(String sql) throws SQLException {
-    CopyOperation op = queryExecutor.startCopy(sql, connection.getAutoCommit());
+  public CompletableFuture<CopyOut> copyOut(String sql) throws SQLException {
+    CopyOperation op = await(queryExecutor.startCopy(sql, connection.getAutoCommit()));
     if (op == null || op instanceof CopyOut) {
-      return (CopyOut) op;
+      return CompletableFuture.completedFuture((CopyOut) op);
     } else {
       op.cancelCopy();
       throw new PSQLException(GT.tr("Requested CopyOut but got {0}", op.getClass().getName()),
@@ -66,10 +68,10 @@ public class CopyManager {
     }
   }
 
-  public CopyDual copyDual(String sql) throws SQLException {
-    CopyOperation op = queryExecutor.startCopy(sql, connection.getAutoCommit());
+  public CompletableFuture<CopyDual> copyDual(String sql) throws SQLException {
+    CopyOperation op = await(queryExecutor.startCopy(sql, connection.getAutoCommit()));
     if (op == null || op instanceof CopyDual) {
-      return (CopyDual) op;
+      return CompletableFuture.completedFuture((CopyDual) op);
     } else {
       op.cancelCopy();
       throw new PSQLException(GT.tr("Requested CopyDual but got {0}", op.getClass().getName()),
@@ -86,14 +88,14 @@ public class CopyManager {
    * @throws SQLException on database usage errors
    * @throws IOException upon writer or database connection failure
    */
-  public long copyOut(final String sql, Writer to) throws SQLException, IOException {
+  public CompletableFuture<Long> copyOut(final String sql, Writer to) throws SQLException, IOException {
     byte[] buf;
-    CopyOut cp = copyOut(sql);
+    CopyOut cp = await(copyOut(sql));
     try {
       while ((buf = cp.readFromCopy()) != null) {
         to.write(encoding.decode(buf));
       }
-      return cp.getHandledRowCount();
+      return CompletableFuture.completedFuture(cp.getHandledRowCount());
     } catch (IOException ioEX) {
       // if not handled this way the close call will hang, at least in 8.2
       if (cp.isActive()) {
@@ -121,14 +123,14 @@ public class CopyManager {
    * @throws SQLException on database usage errors
    * @throws IOException upon output stream or database connection failure
    */
-  public long copyOut(final String sql, OutputStream to) throws SQLException, IOException {
+  public CompletableFuture<Long> copyOut(final String sql, OutputStream to) throws SQLException, IOException {
     byte[] buf;
-    CopyOut cp = copyOut(sql);
+    CopyOut cp = await(copyOut(sql));
     try {
       while ((buf = cp.readFromCopy()) != null) {
         to.write(buf);
       }
-      return cp.getHandledRowCount();
+      return CompletableFuture.completedFuture(cp.getHandledRowCount());
     } catch (IOException ioEX) {
       // if not handled this way the close call will hang, at least in 8.2
       if (cp.isActive()) {
@@ -156,7 +158,7 @@ public class CopyManager {
    * @throws SQLException on database usage issues
    * @throws IOException upon reader or database connection failure
    */
-  public long copyIn(final String sql, Reader from) throws SQLException, IOException {
+  public CompletableFuture<Long> copyIn(final String sql, Reader from) throws SQLException, IOException {
     return copyIn(sql, from, DEFAULT_BUFFER_SIZE);
   }
 
@@ -170,11 +172,11 @@ public class CopyManager {
    * @throws SQLException on database usage issues
    * @throws IOException upon reader or database connection failure
    */
-  public long copyIn(final String sql, Reader from, int bufferSize)
+  public CompletableFuture<Long> copyIn(final String sql, Reader from, int bufferSize)
       throws SQLException, IOException {
     char[] cbuf = new char[bufferSize];
     int len;
-    CopyIn cp = copyIn(sql);
+    CopyIn cp = await(copyIn(sql));
     try {
       while ((len = from.read(cbuf)) >= 0) {
         if (len > 0) {
@@ -199,7 +201,7 @@ public class CopyManager {
    * @throws SQLException on database usage issues
    * @throws IOException upon input stream or database connection failure
    */
-  public long copyIn(final String sql, InputStream from) throws SQLException, IOException {
+  public CompletableFuture<Long> copyIn(final String sql, InputStream from) throws SQLException, IOException {
     return copyIn(sql, from, DEFAULT_BUFFER_SIZE);
   }
 
@@ -213,11 +215,11 @@ public class CopyManager {
    * @throws SQLException on database usage issues
    * @throws IOException upon input stream or database connection failure
    */
-  public long copyIn(final String sql, InputStream from, int bufferSize)
+  public CompletableFuture<Long> copyIn(final String sql, InputStream from, int bufferSize)
       throws SQLException, IOException {
     byte[] buf = new byte[bufferSize];
     int len;
-    CopyIn cp = copyIn(sql);
+    CopyIn cp = await(copyIn(sql));
     try {
       while ((len = from.read(buf)) >= 0) {
         if (len > 0) {

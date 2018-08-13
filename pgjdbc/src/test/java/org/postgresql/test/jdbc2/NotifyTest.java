@@ -21,6 +21,7 @@ import org.junit.Test;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.concurrent.ExecutionException;
 
 public class NotifyTest {
   private Connection conn;
@@ -36,12 +37,12 @@ public class NotifyTest {
   }
 
   @Test(timeout = 60000)
-  public void testNotify() throws SQLException {
+  public void testNotify() throws SQLException, InterruptedException, ExecutionException {
     Statement stmt = conn.createStatement();
     stmt.executeUpdate("LISTEN mynotification");
     stmt.executeUpdate("NOTIFY mynotification");
 
-    PGNotification[] notifications = ((org.postgresql.PGConnection) conn).getNotifications();
+    PGNotification[] notifications = ((org.postgresql.PGConnection) conn).getNotifications().get();
     assertNotNull(notifications);
     assertEquals(1, notifications.length);
     assertEquals("mynotification", notifications[0].getName());
@@ -60,7 +61,7 @@ public class NotifyTest {
     stmt.executeUpdate("LISTEN mynotification");
     stmt.executeUpdate("NOTIFY mynotification, 'message'");
 
-    PGNotification[] notifications = ((org.postgresql.PGConnection) conn).getNotifications();
+    PGNotification[] notifications = ((org.postgresql.PGConnection) conn).getNotifications().get();
     assertNotNull(notifications);
     assertEquals(1, notifications.length);
     assertEquals("mynotification", notifications[0].getName());
@@ -83,7 +84,7 @@ public class NotifyTest {
     try {
       int retries = 20;
       while (retries-- > 0
-        && (notifications = ((org.postgresql.PGConnection) conn).getNotifications()) == null ) {
+        && (notifications = ((org.postgresql.PGConnection) conn).getNotifications().get()) == null ) {
         Thread.sleep(100);
       }
     } catch (InterruptedException ie) {
@@ -108,7 +109,7 @@ public class NotifyTest {
 
     // Here we let the getNotifications() timeout.
     long startMillis = System.currentTimeMillis();
-    PGNotification[] notifications = ((org.postgresql.PGConnection) conn).getNotifications(500);
+    PGNotification[] notifications = ((org.postgresql.PGConnection) conn).getNotifications(500).get();
     long endMillis = System.currentTimeMillis();
     long runtime = endMillis - startMillis;
     assertNull("There have been notifications, althought none have been expected.",notifications);
@@ -126,7 +127,7 @@ public class NotifyTest {
     // listen for notifications
     connectAndNotify("mynotification");
 
-    PGNotification[] notifications = ((org.postgresql.PGConnection) conn).getNotifications(10000);
+    PGNotification[] notifications = ((org.postgresql.PGConnection) conn).getNotifications(10000).get();
     assertNotNull(notifications);
     assertEquals(1, notifications.length);
     assertEquals("mynotification", notifications[0].getName());
@@ -143,7 +144,7 @@ public class NotifyTest {
     // Now we check the case where notifications are already available while we are waiting forever
     connectAndNotify("mynotification");
 
-    PGNotification[] notifications = ((org.postgresql.PGConnection) conn).getNotifications(0);
+    PGNotification[] notifications = ((org.postgresql.PGConnection) conn).getNotifications(0).get();
     assertNotNull(notifications);
     assertEquals(1, notifications.length);
     assertEquals("mynotification", notifications[0].getName());
@@ -169,7 +170,7 @@ public class NotifyTest {
       }
     }).start();
 
-    PGNotification[] notifications = ((org.postgresql.PGConnection) conn).getNotifications(10000);
+    PGNotification[] notifications = ((org.postgresql.PGConnection) conn).getNotifications(10000).get();
     assertNotNull(notifications);
     assertEquals(1, notifications.length);
     assertEquals("mynotification", notifications[0].getName());
@@ -195,7 +196,7 @@ public class NotifyTest {
       }
     }).start();
 
-    PGNotification[] notifications = ((org.postgresql.PGConnection) conn).getNotifications(0);
+    PGNotification[] notifications = ((org.postgresql.PGConnection) conn).getNotifications(0).get();
     assertNotNull(notifications);
     assertEquals(1, notifications.length);
     assertEquals("mynotification", notifications[0].getName());
