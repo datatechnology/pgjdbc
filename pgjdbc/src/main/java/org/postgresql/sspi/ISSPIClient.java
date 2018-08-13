@@ -8,6 +8,7 @@ package org.postgresql.sspi;
 
 import java.io.IOException;
 import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Use Waffle-JNI to support SSPI authentication when PgJDBC is running on a Windows
@@ -20,7 +21,7 @@ public interface ISSPIClient {
 
   void startSSPI() throws SQLException, IOException;
 
-  void continueSSPI(int msgLength) throws SQLException, IOException;
+  CompletableFuture<Void> continueSSPI(int msgLength) throws SQLException, IOException;
 
   void dispose();
 }

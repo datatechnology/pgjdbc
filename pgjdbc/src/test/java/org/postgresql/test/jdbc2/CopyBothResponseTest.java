@@ -79,7 +79,7 @@ public class CopyBothResponseTest {
 
     LogSequenceNumber logSequenceNumber = getCurrentLSN();
     CopyDual copyDual = cm.copyDual(
-        "START_REPLICATION " + logSequenceNumber.asString());
+        "START_REPLICATION " + logSequenceNumber.asString()).get();
     try {
       assertThat(
           "Replication protocol work via copy protocol and initialize as CopyBothResponse, "
@@ -97,7 +97,7 @@ public class CopyBothResponseTest {
 
     LogSequenceNumber logSequenceNumber = getCurrentLSN();
     CopyDual copyDual = cm.copyDual(
-        "START_REPLICATION " + logSequenceNumber.asString());
+        "START_REPLICATION " + logSequenceNumber.asString()).get();
 
     sendStandByUpdate(copyDual, logSequenceNumber, logSequenceNumber, logSequenceNumber, true);
     ByteBuffer buf = ByteBuffer.wrap(copyDual.readFromCopy());
@@ -117,7 +117,7 @@ public class CopyBothResponseTest {
 
     LogSequenceNumber startLsn = getCurrentLSN();
     CopyDual copyDual =
-        cm.copyDual("START_REPLICATION " + startLsn.asString());
+        cm.copyDual("START_REPLICATION " + startLsn.asString()).get();
     sendStandByUpdate(copyDual, startLsn, startLsn, startLsn, true);
 
     ByteBuffer buf = ByteBuffer.wrap(copyDual.readFromCopy());
@@ -144,7 +144,7 @@ public class CopyBothResponseTest {
     st.close();
 
     CopyDual copyDual =
-        cm.copyDual("START_REPLICATION " + startLsn.asString());
+        cm.copyDual("START_REPLICATION " + startLsn.asString()).get();
     sendStandByUpdate(copyDual, startLsn, startLsn, startLsn, false);
 
     ByteBuffer buf = ByteBuffer.wrap(copyDual.readFromCopy());

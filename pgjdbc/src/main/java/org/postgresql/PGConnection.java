@@ -16,6 +16,7 @@ import org.postgresql.util.PGobject;
 import java.sql.Array;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * This interface defines the public PostgreSQL extensions to java.sql.Connection. All Connections
@@ -49,7 +50,7 @@ public interface PGConnection {
    * @throws SQLException if something wrong happens
    * @since 7.3
    */
-  PGNotification[] getNotifications() throws SQLException;
+  CompletableFuture<PGNotification[]> getNotifications() throws SQLException;
 
   /**
    * This method returns any notifications that have been received since the last call to this
@@ -63,7 +64,7 @@ public interface PGConnection {
    * @throws SQLException if something wrong happens
    * @since 43
    */
-  PGNotification[] getNotifications(int timeoutMillis) throws SQLException;
+  CompletableFuture<PGNotification[]> getNotifications(int timeoutMillis) throws SQLException;
 
   /**
    * This returns the COPY API for the current connection.

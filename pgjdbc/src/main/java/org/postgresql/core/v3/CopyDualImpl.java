@@ -11,6 +11,7 @@ import org.postgresql.util.PSQLException;
 import java.sql.SQLException;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.concurrent.CompletableFuture;
 
 public class CopyDualImpl extends CopyOperationImpl implements CopyDual {
   private Queue<byte[]> received = new LinkedList<byte[]>();
@@ -23,7 +24,7 @@ public class CopyDualImpl extends CopyOperationImpl implements CopyDual {
     queryExecutor.flushCopy(this);
   }
 
-  public long endCopy() throws SQLException {
+  public CompletableFuture<Long> endCopy() throws SQLException {
     return queryExecutor.endCopy(this);
   }
 

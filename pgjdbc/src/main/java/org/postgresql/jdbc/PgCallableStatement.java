@@ -30,6 +30,8 @@ import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.Calendar;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import static com.ea.async.Async.await;
 
 class PgCallableStatement extends PgPreparedStatement implements CallableStatement {
   // Used by the callablestatement style methods
@@ -74,10 +76,10 @@ class PgCallableStatement extends PgPreparedStatement implements CallableStateme
   }
 
   @Override
-  public boolean executeWithFlags(int flags) throws SQLException {
-    boolean hasResultSet = super.executeWithFlags(flags);
+  public CompletableFuture<Boolean> executeWithFlags(int flags) throws SQLException {
+    boolean hasResultSet = await(super.executeWithFlags(flags));
     if (!isFunction || !returnTypeSet) {
-      return hasResultSet;
+      return CompletableFuture.completedFuture(hasResultSet);
     }
 
     // If we are executing and there are out parameters
@@ -153,7 +155,7 @@ class PgCallableStatement extends PgPreparedStatement implements CallableStateme
     synchronized (this) {
       result = null;
     }
-    return false;
+    return CompletableFuture.completedFuture(false);
   }
 
   /**

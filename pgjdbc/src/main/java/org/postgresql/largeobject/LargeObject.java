@@ -15,6 +15,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+
+import static com.ea.async.Async.await;
 
 /**
  * This class provides the basic methods required to run the interface, plus a pair of methods that
@@ -86,10 +90,12 @@ public class LargeObject
    * @param commitOnClose commit the transaction when this LOB will be closed (defined in
    *        LargeObjectManager)
    * @throws SQLException if a database-access error occurs.
+ * @throws ExecutionException 
+ * @throws InterruptedException 
    * @see org.postgresql.largeobject.LargeObjectManager
    */
   protected LargeObject(Fastpath fp, long oid, int mode, BaseConnection conn, boolean commitOnClose)
-      throws SQLException {
+      throws SQLException, InterruptedException, ExecutionException {
     this.fp = fp;
     this.oid = oid;
     this.mode = mode;
@@ -103,7 +109,7 @@ public class LargeObject
     FastpathArg[] args = new FastpathArg[2];
     args[0] = Fastpath.createOIDArg(oid);
     args[1] = new FastpathArg(mode);
-    this.fd = fp.getInteger("lo_open", args);
+    this.fd = fp.getInteger("lo_open", args).get();
   }
 
   /**
@@ -116,13 +122,15 @@ public class LargeObject
    * @param oid of the Large Object to open
    * @param mode Mode of opening the large object (defined in LargeObjectManager)
    * @throws SQLException if a database-access error occurs.
+ * @throws ExecutionException 
+ * @throws InterruptedException 
    * @see org.postgresql.largeobject.LargeObjectManager
    */
-  protected LargeObject(Fastpath fp, long oid, int mode) throws SQLException {
+  protected LargeObject(Fastpath fp, long oid, int mode) throws SQLException, InterruptedException, ExecutionException {
     this(fp, oid, mode, null, false);
   }
 
-  public LargeObject copy() throws SQLException {
+  public LargeObject copy() throws SQLException, InterruptedException, ExecutionException {
     return new LargeObject(fp, oid, mode);
   }
 
@@ -190,7 +198,7 @@ public class LargeObject
    * @return byte[] array containing data read
    * @throws SQLException if a database-access error occurs.
    */
-  public byte[] read(int len) throws SQLException {
+  public CompletableFuture<byte[]> read(int len) throws SQLException {
     // This is the original method, where the entire block (len bytes)
     // is retrieved in one go.
     FastpathArg[] args = new FastpathArg[2];
@@ -208,13 +216,13 @@ public class LargeObject
    * @return the number of bytes actually read
    * @throws SQLException if a database-access error occurs.
    */
-  public int read(byte[] buf, int off, int len) throws SQLException {
-    byte[] b = read(len);
+  public CompletableFuture<Integer> read(byte[] buf, int off, int len) throws SQLException {
+    byte[] b = await(read(len));
     if (b.length < len) {
       len = b.length;
     }
     System.arraycopy(b, 0, buf, off, len);
-    return len;
+    return CompletableFuture.completedFuture(len);
   }
 
   /**
@@ -256,12 +264,13 @@ public class LargeObject
    * @param ref Either SEEK_SET, SEEK_CUR or SEEK_END
    * @throws SQLException if a database-access error occurs.
    */
-  public void seek(int pos, int ref) throws SQLException {
+  public CompletableFuture<Void> seek(int pos, int ref) throws SQLException {
     FastpathArg[] args = new FastpathArg[3];
     args[0] = new FastpathArg(fd);
     args[1] = new FastpathArg(pos);
     args[2] = new FastpathArg(ref);
-    fp.fastpath("lo_lseek", args);
+    await(fp.fastpath("lo_lseek", args));
+    return CompletableFuture.completedFuture(null);
   }
 
   /**
@@ -271,12 +280,13 @@ public class LargeObject
    * @param ref Either SEEK_SET, SEEK_CUR or SEEK_END
    * @throws SQLException if a database-access error occurs.
    */
-  public void seek64(long pos, int ref) throws SQLException {
+  public CompletableFuture<Void> seek64(long pos, int ref) throws SQLException {
     FastpathArg[] args = new FastpathArg[3];
     args[0] = new FastpathArg(fd);
     args[1] = new FastpathArg(pos);
     args[2] = new FastpathArg(ref);
-    fp.fastpath("lo_lseek64", args);
+    await(fp.fastpath("lo_lseek64", args));
+    return CompletableFuture.completedFuture(null);
   }
 
   /**
@@ -297,7 +307,7 @@ public class LargeObject
    * @return the current position within the object
    * @throws SQLException if a database-access error occurs.
    */
-  public int tell() throws SQLException {
+  public CompletableFuture<Integer> tell() throws SQLException {
     FastpathArg[] args = new FastpathArg[1];
     args[0] = new FastpathArg(fd);
     return fp.getInteger("lo_tell", args);
@@ -307,7 +317,7 @@ public class LargeObject
    * @return the current position within the object
    * @throws SQLException if a database-access error occurs.
    */
-  public long tell64() throws SQLException {
+  public CompletableFuture<Long> tell64() throws SQLException {
     FastpathArg[] args = new FastpathArg[1];
     args[0] = new FastpathArg(fd);
     return fp.getLong("lo_tell64", args);
@@ -323,12 +333,12 @@ public class LargeObject
    * @return the size of the large object
    * @throws SQLException if a database-access error occurs.
    */
-  public int size() throws SQLException {
-    int cp = tell();
+  public CompletableFuture<Integer> size() throws SQLException {
+    int cp = await(tell());
     seek(0, SEEK_END);
-    int sz = tell();
+    int sz = await(tell());
     seek(cp, SEEK_SET);
-    return sz;
+    return CompletableFuture.completedFuture(sz);
   }
 
   /**
@@ -337,12 +347,12 @@ public class LargeObject
    * @return the size of the large object
    * @throws SQLException if a database-access error occurs.
    */
-  public long size64() throws SQLException {
-    long cp = tell64();
+  public CompletableFuture<Long> size64() throws SQLException {
+    long cp = await(tell64());
     seek64(0, SEEK_END);
-    long sz = tell64();
+    long sz = await(tell64());
     seek64(cp, SEEK_SET);
-    return sz;
+    return CompletableFuture.completedFuture(sz);
   }
 
   /**

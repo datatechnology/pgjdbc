@@ -272,7 +272,7 @@ public class BlobTest {
 
     InputStream fis = getClass().getResourceAsStream(file);
 
-    long oid = lom.createLO(LargeObjectManager.READWRITE);
+    long oid = lom.createLO(LargeObjectManager.READWRITE).get();
     LargeObject blob = lom.open(oid);
 
     int s;

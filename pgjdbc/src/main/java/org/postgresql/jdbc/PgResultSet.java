@@ -73,7 +73,7 @@ import java.util.TimeZone;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
-
+import static com.ea.async.Async.await;
 
 public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultSet {
 
@@ -246,8 +246,8 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
           //
           // We take the scrollability from the statement, but until
           // we have updatable cursors it must be readonly.
-          ResultSet rs =
-              connection.execSQLQuery(sb.toString(), resultsettype, ResultSet.CONCUR_READ_ONLY);
+          ResultSet rs = await(
+              connection.execSQLQuery(sb.toString(), resultsettype, ResultSet.CONCUR_READ_ONLY));
           //
           // In long running transactions these backend cursors take up memory space
           // we could close in rs.close(), but if the transaction is closed before the result set,
