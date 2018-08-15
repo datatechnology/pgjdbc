@@ -14,8 +14,6 @@ import java.sql.SQLException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
-import static com.ea.async.Async.await;
-
 public class PgClob extends AbstractBlobClob implements java.sql.Clob {
 
 	public PgClob(org.postgresql.core.BaseConnection conn, long oid) throws java.sql.SQLException {

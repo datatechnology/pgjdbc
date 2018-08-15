@@ -411,7 +411,7 @@ public class PgConnection implements BaseConnection {
 	public CompletableFuture<ResultSet> execSQLQuery(String s, int resultSetType, int resultSetConcurrency)
 			throws SQLException {
 		BaseStatement stat = (BaseStatement) createStatement(resultSetType, resultSetConcurrency);
-		boolean hasResultSet = await(stat.executeWithFlags(s, QueryExecutor.QUERY_SUPPRESS_BEGIN));
+		boolean hasResultSet = stat.executeWithFlags(s, QueryExecutor.QUERY_SUPPRESS_BEGIN);
 
 		while (!hasResultSet && stat.getUpdateCount() != -1) {
 			hasResultSet = stat.getMoreResults();
@@ -434,8 +434,8 @@ public class PgConnection implements BaseConnection {
 	public CompletableFuture<Void> execSQLUpdate(String s) throws SQLException {
 		CompletableFuture<Void> resultAsync = new CompletableFuture<>();
 		BaseStatement stmt = (BaseStatement) createStatement();
-		if (await(stmt.executeWithFlags(s, QueryExecutor.QUERY_NO_METADATA | QueryExecutor.QUERY_NO_RESULTS
-				| QueryExecutor.QUERY_SUPPRESS_BEGIN))) {
+		if (stmt.executeWithFlags(s, QueryExecutor.QUERY_NO_METADATA | QueryExecutor.QUERY_NO_RESULTS
+				| QueryExecutor.QUERY_SUPPRESS_BEGIN)) {
 			// throw new PSQLException(GT.tr("A result was returned when none was
 			// expected."),
 			// PSQLState.TOO_MANY_RESULTS);
@@ -760,7 +760,7 @@ public class PgConnection implements BaseConnection {
 			// retry
 			await(getQueryExecutor().execute(query, null, new TransactionCommandHandler(), 0, 0, flags));
 		}
-		
+
 		return CompletableFuture.completedFuture(null);
 	}
 
@@ -808,11 +808,22 @@ public class PgConnection implements BaseConnection {
 		checkClosed();
 
 		String level = null;
-		final ResultSet rs = await(execSQLQuery("SHOW TRANSACTION ISOLATION LEVEL")); // nb: no BEGIN triggered
-		if (rs.next()) {
-			level = rs.getString(1);
+		ResultSet rs = null;
+		try {
+			rs = execSQLQuery("SHOW TRANSACTION ISOLATION LEVEL").get();
+			if (rs.next()) {
+				level = rs.getString(1);
+			}
+			rs.close();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new SQLException(e);
+		} finally {
+			if (rs != null) {
+				rs.close();
+			}
+
 		}
-		rs.close();
+		// nb: no BEGIN triggered
 
 		// TODO revisit: throw exception instead of silently eating the error in unknown
 		// cases?

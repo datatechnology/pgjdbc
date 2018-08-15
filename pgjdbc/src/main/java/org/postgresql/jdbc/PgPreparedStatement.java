@@ -66,9 +66,7 @@ import java.util.Calendar;
 import java.util.Map;
 import java.util.TimeZone;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import static com.ea.async.Async.await;
 
 class PgPreparedStatement extends PgStatement implements PreparedStatement {
 	protected final CachedQuery preparedQuery; // Query fragments for prepared statement.
@@ -119,12 +117,8 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 	 * @exception SQLException if a database access error occurs
 	 */
 	public java.sql.ResultSet executeQuery() throws SQLException {
-		try {
-			if (!executeWithFlags(0).get()) {
-				throw new PSQLException(GT.tr("No results were returned by the query."), PSQLState.NO_DATA);
-			}
-		} catch (InterruptedException | ExecutionException e) {
-			throw new SQLException(e);
+		if (!executeWithFlags(0)) {
+			throw new PSQLException(GT.tr("No results were returned by the query."), PSQLState.NO_DATA);
 		}
 
 		return getSingleResultSet();
@@ -136,11 +130,7 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 	}
 
 	public int executeUpdate() throws SQLException {
-		try {
-			executeWithFlags(QueryExecutor.QUERY_NO_RESULTS).get();
-		} catch (InterruptedException | ExecutionException e) {
-			throw new SQLException(e);
-		}
+		executeWithFlags(QueryExecutor.QUERY_NO_RESULTS);
 
 		return getNoResultUpdateCount();
 	}
@@ -151,14 +141,10 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 	}
 
 	public boolean execute() throws SQLException {
-		try {
-			return executeWithFlags(0).get();
-		} catch (InterruptedException | ExecutionException e) {
-			throw new SQLException(e);
-		}
+		return executeWithFlags(0);
 	}
 
-	public CompletableFuture<Boolean> executeWithFlags(int flags) throws SQLException {
+	public boolean executeWithFlags(int flags) throws SQLException {
 		try {
 			checkClosed();
 
@@ -166,11 +152,11 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 				flags |= QueryExecutor.QUERY_EXECUTE_AS_SIMPLE;
 			}
 
-			await(execute(preparedQuery, preparedParameters, flags));
+			execute(preparedQuery, preparedParameters, flags);
 
 			synchronized (this) {
 				checkClosed();
-				return CompletableFuture.completedFuture((result != null && result.getResultSet() != null));
+				return (result != null && result.getResultSet() != null);
 			}
 		} finally {
 			defaultTimeZone = null;
@@ -641,12 +627,7 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 			if (in instanceof Blob) {
 				setBlob(parameterIndex, (Blob) in);
 			} else if (in instanceof InputStream) {
-				try {
-					long oid = createBlob(parameterIndex, (InputStream) in, -1);
-				} catch (InterruptedException | ExecutionException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
+				long oid = createBlob(parameterIndex, (InputStream) in, -1);
 
 			} else {
 				throw new PSQLException(
@@ -1122,11 +1103,20 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 		setString(i, x.toString(), oid);
 	}
 
-	protected long createBlob(int i, InputStream inputStream, long length)
-			throws SQLException, InterruptedException, ExecutionException {
+	protected long createBlob(int i, InputStream inputStream, long length) throws SQLException {
 		LargeObjectManager lom = connection.getLargeObjectAPI();
-		long oid = lom.createLO().get();
-		LargeObject lob = lom.open(oid);
+		long oid = 0;
+		try {
+			oid = lom.createLO().get();
+		} catch (InterruptedException | ExecutionException e1) {
+			throw new SQLException(e1);
+		}
+		LargeObject lob = null;
+		try {
+			lob = lom.open(oid);
+		} catch (InterruptedException | ExecutionException e1) {
+			throw new SQLException(e1);
+		}
 		OutputStream outputStream = lob.getOutputStream();
 		byte[] buf = new byte[4096];
 		try {
@@ -1168,16 +1158,8 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 		InputStream inStream = x.getBinaryStream();
 		try {
 			long oid;
-			try {
-				oid = createBlob(i, inStream, x.length());
-				setLong(i, oid);
-			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (ExecutionException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
+			oid = createBlob(i, inStream, x.length());
+			setLong(i, oid);
 
 		} finally {
 			try {
@@ -1237,14 +1219,19 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 		Reader l_inStream = x.getCharacterStream();
 		int l_length = (int) x.length();
 		LargeObjectManager lom = connection.getLargeObjectAPI();
-		long oid = await(lom.createLO());
+		long oid;
+		try {
+			oid = lom.createLO().get();
+		} catch (InterruptedException | ExecutionException e1) {
+			throw new SQLException(e1);
+		}
 
 		try {
 			LargeObject lob = lom.open(oid);
 			Charset connectionCharset = Charset.forName(connection.getEncoding().name());
 			OutputStream los = lob.getOutputStream();
 			Writer lw = new OutputStreamWriter(los, connectionCharset);
-			
+
 			// could be buffered, but then the OutputStream returned by LargeObject
 			// is buffered internally anyhow, so there would be no performance
 			// boost gained, if anything it would be worse!
@@ -1512,16 +1499,8 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 			throw new PSQLException(GT.tr("Invalid stream length {0}.", length), PSQLState.INVALID_PARAMETER_VALUE);
 		}
 
-		try {
-			long oid = createBlob(parameterIndex, inputStream, length);
-			setLong(parameterIndex, oid);
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (ExecutionException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+		long oid = createBlob(parameterIndex, inputStream, length);
+		setLong(parameterIndex, oid);
 	}
 
 	public void setBlob(int parameterIndex, InputStream inputStream) throws SQLException {
@@ -1532,16 +1511,8 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 			return;
 		}
 
-		try {
-			long oid = createBlob(parameterIndex, inputStream, -1);
-			setLong(parameterIndex, oid);
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (ExecutionException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+		long oid = createBlob(parameterIndex, inputStream, -1);
+		setLong(parameterIndex, oid);
 	}
 
 	public void setNClob(int parameterIndex, Reader reader, long length) throws SQLException {

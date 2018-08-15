@@ -51,7 +51,7 @@ public interface BaseStatement extends PGStatement, Statement {
    * @return true if there is a result set
    * @throws SQLException if something goes wrong.
    */
-  CompletableFuture<Boolean> executeWithFlags(String p_sql, int flags) throws SQLException;
+  boolean executeWithFlags(String p_sql, int flags) throws SQLException;
 
   /**
    * Execute a query, passing additional query flags.
@@ -62,7 +62,7 @@ public interface BaseStatement extends PGStatement, Statement {
    * @return true if there is a result set
    * @throws SQLException if something goes wrong.
    */
-  CompletableFuture<Boolean> executeWithFlags(CachedQuery cachedQuery, int flags) throws SQLException;
+  boolean executeWithFlags(CachedQuery cachedQuery, int flags) throws SQLException;
 
   /**
    * Execute a prepared query, passing additional query flags.
@@ -72,5 +72,5 @@ public interface BaseStatement extends PGStatement, Statement {
    * @return true if there is a result set
    * @throws SQLException if something goes wrong.
    */
-  CompletableFuture<Boolean> executeWithFlags(int flags) throws SQLException;
+  boolean executeWithFlags(int flags) throws SQLException;
 }

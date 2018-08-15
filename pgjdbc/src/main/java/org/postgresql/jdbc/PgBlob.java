@@ -11,9 +11,7 @@ import org.postgresql.util.PSQLException;
 import org.postgresql.util.PSQLState;
 
 import java.sql.SQLException;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import static com.ea.async.Async.await;
 
 public class PgBlob extends AbstractBlobClob implements java.sql.Blob {
 
