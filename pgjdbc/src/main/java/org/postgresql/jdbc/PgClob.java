@@ -57,7 +57,7 @@ public class PgClob extends AbstractBlobClob implements java.sql.Clob {
 	public synchronized String getSubString(long i, int j) throws SQLException {
 		assertPosition(i, j);
 		try {
-			getLo(false).get().seek((int) i - 1);
+			getLo(false).get().seek((int) i - 1).get();
 		} catch (InterruptedException | ExecutionException e) {
 			throw new SQLException(e);
 		}

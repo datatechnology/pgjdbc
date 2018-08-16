@@ -10,6 +10,7 @@ import org.postgresql.replication.fluent.ChainedCommonStreamBuilder;
 
 import java.sql.SQLException;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
 
 public interface ChainedLogicalStreamBuilder
     extends ChainedCommonStreamBuilder<ChainedLogicalStreamBuilder> {
@@ -19,7 +20,7 @@ public interface ChainedLogicalStreamBuilder
    * @return not null PGReplicationStream available for fetch data in logical form
    * @throws SQLException  if there are errors
    */
-  PGReplicationStream start() throws SQLException;
+  CompletableFuture<PGReplicationStream> start() throws SQLException;
 
   /**
    *

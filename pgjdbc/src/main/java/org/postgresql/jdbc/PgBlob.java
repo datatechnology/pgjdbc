@@ -48,7 +48,7 @@ public class PgBlob extends AbstractBlobClob implements java.sql.Blob {
       throws SQLException {
     assertPosition(pos);
     try {
-		getLo(true).get().seek((int) (pos - 1));
+		getLo(true).get().seek((int) (pos - 1)).get();
 	} catch (InterruptedException | ExecutionException e) {
 		throw new SQLException(e);
 	}

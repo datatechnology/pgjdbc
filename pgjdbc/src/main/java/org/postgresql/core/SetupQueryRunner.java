@@ -13,6 +13,8 @@ import org.postgresql.util.PSQLState;
 import java.sql.SQLException;
 import java.sql.SQLWarning;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import static com.ea.async.Async.await;
 
 /**
  * Poor man's Statement &amp; ResultSet, used for initial queries while we're still initializing the
@@ -38,7 +40,7 @@ public class SetupQueryRunner {
     }
   }
 
-  public static byte[][] run(QueryExecutor executor, String queryString,
+  public static CompletableFuture<byte[][]> run(QueryExecutor executor, String queryString,
       boolean wantResults) throws SQLException {
     Query query = executor.createSimpleQuery(queryString);
     SimpleResultHandler handler = new SimpleResultHandler();
@@ -50,13 +52,13 @@ public class SetupQueryRunner {
     }
 
     try {
-      executor.execute(query, null, handler, 0, 0, flags);
+      await(executor.execute(query, null, handler, 0, 0, flags));
     } finally {
       query.close();
     }
 
     if (!wantResults) {
-      return null;
+      return CompletableFuture.completedFuture(null);
     }
 
     List<byte[][]> tuples = handler.getResults();
@@ -65,7 +67,7 @@ public class SetupQueryRunner {
           PSQLState.CONNECTION_UNABLE_TO_CONNECT);
     }
 
-    return tuples.get(0);
+    return CompletableFuture.completedFuture(tuples.get(0));
   }
 
 }

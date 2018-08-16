@@ -6,6 +6,7 @@
 package org.postgresql.copy;
 
 import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Exchange bulk data between client and PostgreSQL database tables. See CopyIn and CopyOut for full
@@ -36,10 +37,11 @@ public interface CopyOperation {
 
   /**
    * Cancels this copy operation, discarding any exchanged data.
+ * @return 
    *
    * @throws SQLException if cancelling fails
    */
-  void cancelCopy() throws SQLException;
+  CompletableFuture<Void> cancelCopy() throws SQLException;
 
   /**
    * After succesful end of copy, returns the number of database records handled in that operation.

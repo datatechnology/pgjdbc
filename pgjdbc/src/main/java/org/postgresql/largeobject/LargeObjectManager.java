@@ -376,10 +376,11 @@ public class LargeObjectManager {
 	 * @throws SQLException
 	 *             on error
 	 */
-	public void delete(long oid) throws SQLException {
+	public CompletableFuture<Void> delete(long oid) throws SQLException {
 		FastpathArg[] args = new FastpathArg[1];
 		args[0] = Fastpath.createOIDArg(oid);
-		fp.fastpath("lo_unlink", args);
+		await(fp.fastpath("lo_unlink", args));
+		return CompletableFuture.completedFuture(null);
 	}
 
 	/**
@@ -396,8 +397,8 @@ public class LargeObjectManager {
 	 * @deprecated As of 8.3, replaced by {@link #unlink(long)}
 	 */
 	@Deprecated
-	public void unlink(int oid) throws SQLException {
-		delete((long) oid);
+	public CompletableFuture<Void> unlink(int oid) throws SQLException {
+		return delete((long) oid);
 	}
 
 	/**
@@ -412,8 +413,8 @@ public class LargeObjectManager {
 	 * @throws SQLException
 	 *             on error
 	 */
-	public void unlink(long oid) throws SQLException {
-		delete(oid);
+	public CompletableFuture<Void> unlink(long oid) throws SQLException {
+		return delete(oid);
 	}
 
 	/**
@@ -426,7 +427,7 @@ public class LargeObjectManager {
 	 * @deprecated As of 8.3, replaced by {@link #delete(long)}
 	 */
 	@Deprecated
-	public void delete(int oid) throws SQLException {
-		delete((long) oid);
+	public CompletableFuture<Void> delete(int oid) throws SQLException {
+		return delete((long) oid);
 	}
 }

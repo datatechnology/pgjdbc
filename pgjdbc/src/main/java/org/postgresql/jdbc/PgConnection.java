@@ -404,12 +404,11 @@ public class PgConnection implements BaseConnection {
 
 	}
 
-	public CompletableFuture<ResultSet> execSQLQuery(String s) throws SQLException {
+	public ResultSet execSQLQuery(String s) throws SQLException {
 		return execSQLQuery(s, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
 	}
 
-	public CompletableFuture<ResultSet> execSQLQuery(String s, int resultSetType, int resultSetConcurrency)
-			throws SQLException {
+	public ResultSet execSQLQuery(String s, int resultSetType, int resultSetConcurrency) throws SQLException {
 		BaseStatement stat = (BaseStatement) createStatement(resultSetType, resultSetConcurrency);
 		boolean hasResultSet = stat.executeWithFlags(s, QueryExecutor.QUERY_SUPPRESS_BEGIN);
 
@@ -428,19 +427,17 @@ public class PgConnection implements BaseConnection {
 			addWarning(warnings);
 		}
 
-		return CompletableFuture.completedFuture(stat.getResultSet());
+		return stat.getResultSet();
 	}
 
-	public CompletableFuture<Void> execSQLUpdate(String s) throws SQLException {
-		CompletableFuture<Void> resultAsync = new CompletableFuture<>();
+	public void execSQLUpdate(String s) throws SQLException {
 		BaseStatement stmt = (BaseStatement) createStatement();
 		if (stmt.executeWithFlags(s, QueryExecutor.QUERY_NO_METADATA | QueryExecutor.QUERY_NO_RESULTS
 				| QueryExecutor.QUERY_SUPPRESS_BEGIN)) {
 			// throw new PSQLException(GT.tr("A result was returned when none was
 			// expected."),
 			// PSQLState.TOO_MANY_RESULTS);
-			resultAsync.completeExceptionally(new PSQLException(GT.tr("A result was returned when none was expected."),
-					PSQLState.TOO_MANY_RESULTS));
+			new PSQLException(GT.tr("A result was returned when none was expected."), PSQLState.TOO_MANY_RESULTS);
 		} else {
 
 			// Transfer warnings to the connection, since the user never
@@ -449,11 +446,8 @@ public class PgConnection implements BaseConnection {
 			if (warnings != null) {
 				addWarning(warnings);
 			}
-
 			stmt.close();
-			resultAsync.complete(null);
 		}
-		return resultAsync;
 	}
 
 	/**
@@ -796,7 +790,11 @@ public class PgConnection implements BaseConnection {
 		}
 
 		if (queryExecutor.getTransactionState() != TransactionState.IDLE) {
-			executeTransactionCommand(rollbackQuery);
+			try {
+				executeTransactionCommand(rollbackQuery).get();
+			} catch (InterruptedException | ExecutionException e) {
+				throw new SQLException(e);
+			}
 		}
 	}
 
@@ -809,20 +807,12 @@ public class PgConnection implements BaseConnection {
 
 		String level = null;
 		ResultSet rs = null;
-		try {
-			rs = execSQLQuery("SHOW TRANSACTION ISOLATION LEVEL").get();
-			if (rs.next()) {
-				level = rs.getString(1);
-			}
-			rs.close();
-		} catch (InterruptedException | ExecutionException e) {
-			throw new SQLException(e);
-		} finally {
-			if (rs != null) {
-				rs.close();
-			}
-
+		rs = execSQLQuery("SHOW TRANSACTION ISOLATION LEVEL");
+		if (rs.next()) {
+			level = rs.getString(1);
 		}
+		rs.close();
+
 		// nb: no BEGIN triggered
 
 		// TODO revisit: throw exception instead of silently eating the error in unknown

@@ -349,7 +349,7 @@ public class BlobTest {
       result = result && f == -1 && b == -1;
 
       if (!result) {
-        fail("Large Object API Blob compare failed at " + c + " of " + blob.size());
+        fail("Large Object API Blob compare failed at " + c + " of " + blob.size().get());
       }
 
       blob.close();

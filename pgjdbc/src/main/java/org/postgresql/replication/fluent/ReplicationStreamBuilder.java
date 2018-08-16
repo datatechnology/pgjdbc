@@ -18,6 +18,7 @@ import org.postgresql.replication.fluent.physical.PhysicalStreamBuilder;
 import org.postgresql.replication.fluent.physical.StartPhysicalReplicationCallback;
 
 import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
 
 public class ReplicationStreamBuilder implements ChainedStreamBuilder {
   private final BaseConnection baseConnection;
@@ -33,7 +34,7 @@ public class ReplicationStreamBuilder implements ChainedStreamBuilder {
   public ChainedLogicalStreamBuilder logical() {
     return new LogicalStreamBuilder(new StartLogicalReplicationCallback() {
       @Override
-      public PGReplicationStream start(LogicalReplicationOptions options) throws SQLException {
+      public CompletableFuture<PGReplicationStream> start(LogicalReplicationOptions options) throws SQLException {
         ReplicationProtocol protocol = baseConnection.getReplicationProtocol();
         return protocol.startLogical(options);
       }
@@ -44,7 +45,7 @@ public class ReplicationStreamBuilder implements ChainedStreamBuilder {
   public ChainedPhysicalStreamBuilder physical() {
     return new PhysicalStreamBuilder(new StartPhysicalReplicationCallback() {
       @Override
-      public PGReplicationStream start(PhysicalReplicationOptions options) throws SQLException {
+      public CompletableFuture<PGReplicationStream> start(PhysicalReplicationOptions options) throws SQLException {
         ReplicationProtocol protocol = baseConnection.getReplicationProtocol();
         return protocol.startPhysical(options);
       }

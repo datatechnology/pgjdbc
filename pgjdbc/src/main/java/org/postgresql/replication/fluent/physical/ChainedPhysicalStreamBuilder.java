@@ -9,6 +9,7 @@ import org.postgresql.replication.PGReplicationStream;
 import org.postgresql.replication.fluent.ChainedCommonStreamBuilder;
 
 import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
 
 public interface ChainedPhysicalStreamBuilder extends
     ChainedCommonStreamBuilder<ChainedPhysicalStreamBuilder> {
@@ -19,5 +20,5 @@ public interface ChainedPhysicalStreamBuilder extends
    * @return not null PGReplicationStream available for fetch wal logs in binary form
    * @throws SQLException on error
    */
-  PGReplicationStream start() throws SQLException;
+	CompletableFuture<PGReplicationStream> start() throws SQLException;
 }

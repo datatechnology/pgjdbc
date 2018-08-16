@@ -8,7 +8,8 @@ package org.postgresql.replication.fluent.logical;
 import org.postgresql.replication.PGReplicationStream;
 
 import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
 
 public interface StartLogicalReplicationCallback {
-  PGReplicationStream start(LogicalReplicationOptions options) throws SQLException;
+	CompletableFuture<PGReplicationStream> start(LogicalReplicationOptions options) throws SQLException;
 }

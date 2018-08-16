@@ -51,7 +51,7 @@ public class CopyManager {
     if (op == null || op instanceof CopyIn) {
       return CompletableFuture.completedFuture((CopyIn) op);
     } else {
-      op.cancelCopy();
+      await(op.cancelCopy());
       throw new PSQLException(GT.tr("Requested CopyIn but got {0}", op.getClass().getName()),
               PSQLState.WRONG_OBJECT_TYPE);
     }
@@ -62,7 +62,7 @@ public class CopyManager {
     if (op == null || op instanceof CopyOut) {
       return CompletableFuture.completedFuture((CopyOut) op);
     } else {
-      op.cancelCopy();
+      await(op.cancelCopy());
       throw new PSQLException(GT.tr("Requested CopyOut but got {0}", op.getClass().getName()),
               PSQLState.WRONG_OBJECT_TYPE);
     }
@@ -73,7 +73,7 @@ public class CopyManager {
     if (op == null || op instanceof CopyDual) {
       return CompletableFuture.completedFuture((CopyDual) op);
     } else {
-      op.cancelCopy();
+      await(op.cancelCopy());
       throw new PSQLException(GT.tr("Requested CopyDual but got {0}", op.getClass().getName()),
           PSQLState.WRONG_OBJECT_TYPE);
     }
@@ -92,24 +92,24 @@ public class CopyManager {
     byte[] buf;
     CopyOut cp = await(copyOut(sql));
     try {
-      while ((buf = cp.readFromCopy()) != null) {
+      while ((buf = await(cp.readFromCopy())) != null) {
         to.write(encoding.decode(buf));
       }
       return CompletableFuture.completedFuture(cp.getHandledRowCount());
     } catch (IOException ioEX) {
       // if not handled this way the close call will hang, at least in 8.2
       if (cp.isActive()) {
-        cp.cancelCopy();
+        await(cp.cancelCopy());
       }
       try { // read until excausted or operation cancelled SQLException
-        while ((buf = cp.readFromCopy()) != null) {
+        while ((buf = await(cp.readFromCopy())) != null) {
         }
       } catch (SQLException sqlEx) {
       } // typically after several kB
       throw ioEX;
     } finally { // see to it that we do not leave the connection locked
       if (cp.isActive()) {
-        cp.cancelCopy();
+        await(cp.cancelCopy());
       }
     }
   }
@@ -127,24 +127,24 @@ public class CopyManager {
     byte[] buf;
     CopyOut cp = await(copyOut(sql));
     try {
-      while ((buf = cp.readFromCopy()) != null) {
+      while ((buf = await(cp.readFromCopy())) != null) {
         to.write(buf);
       }
       return CompletableFuture.completedFuture(cp.getHandledRowCount());
     } catch (IOException ioEX) {
       // if not handled this way the close call will hang, at least in 8.2
       if (cp.isActive()) {
-        cp.cancelCopy();
+        await(cp.cancelCopy());
       }
       try { // read until excausted or operation cancelled SQLException
-        while ((buf = cp.readFromCopy()) != null) {
+        while ((buf = await(cp.readFromCopy())) != null) {
         }
       } catch (SQLException sqlEx) {
       } // typically after several kB
       throw ioEX;
     } finally { // see to it that we do not leave the connection locked
       if (cp.isActive()) {
-        cp.cancelCopy();
+        await(cp.cancelCopy());
       }
     }
   }
@@ -181,13 +181,13 @@ public class CopyManager {
       while ((len = from.read(cbuf)) >= 0) {
         if (len > 0) {
           byte[] buf = encoding.encode(new String(cbuf, 0, len));
-          cp.writeToCopy(buf, 0, buf.length);
+          await(cp.writeToCopy(buf, 0, buf.length));
         }
       }
       return cp.endCopy();
     } finally { // see to it that we do not leave the connection locked
       if (cp.isActive()) {
-        cp.cancelCopy();
+        await(cp.cancelCopy());
       }
     }
   }
@@ -223,13 +223,13 @@ public class CopyManager {
     try {
       while ((len = from.read(buf)) >= 0) {
         if (len > 0) {
-          cp.writeToCopy(buf, 0, len);
+          await(cp.writeToCopy(buf, 0, len));
         }
       }
       return cp.endCopy();
     } finally { // see to it that we do not leave the connection locked
       if (cp.isActive()) {
-        cp.cancelCopy();
+        await(cp.cancelCopy());
       }
     }
   }

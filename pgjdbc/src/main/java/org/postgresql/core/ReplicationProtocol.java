@@ -10,6 +10,7 @@ import org.postgresql.replication.fluent.logical.LogicalReplicationOptions;
 import org.postgresql.replication.fluent.physical.PhysicalReplicationOptions;
 
 import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * <p>Abstracts the protocol-specific details of physic and logic replication. <p>With each
@@ -22,12 +23,12 @@ public interface ReplicationProtocol {
    * plugin
    * @throws SQLException on error
    */
-  PGReplicationStream startLogical(LogicalReplicationOptions options) throws SQLException;
+  CompletableFuture<PGReplicationStream> startLogical(LogicalReplicationOptions options) throws SQLException;
 
   /**
    * @param options not null options for physical replication stream
    * @return not null stream instance from which available fetch wal logs
    * @throws SQLException on error
    */
-  PGReplicationStream startPhysical(PhysicalReplicationOptions options) throws SQLException;
+  CompletableFuture<PGReplicationStream> startPhysical(PhysicalReplicationOptions options) throws SQLException;
 }

@@ -175,9 +175,17 @@ public class BlobInputStream extends InputStream {
     checkClosed();
     try {
       if (mpos <= Integer.MAX_VALUE) {
-        lo.seek((int)mpos);
+        try {
+			lo.seek((int)mpos).get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new IOException(e);
+		}
       } else {
-        lo.seek64(mpos, LargeObject.SEEK_SET);
+        try {
+			lo.seek64(mpos, LargeObject.SEEK_SET).get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new IOException(e);
+		}
       }
       buffer = null;
       apos = mpos;

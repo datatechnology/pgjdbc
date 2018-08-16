@@ -247,11 +247,8 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 				// We take the scrollability from the statement, but until
 				// we have updatable cursors it must be readonly.
 				ResultSet rs;
-				try {
-					rs = connection.execSQLQuery(sb.toString(), resultsettype, ResultSet.CONCUR_READ_ONLY).get();
-				} catch (InterruptedException | ExecutionException e) {
-					 throw new SQLException(e);
-				}
+				rs = connection.execSQLQuery(sb.toString(), resultsettype, ResultSet.CONCUR_READ_ONLY);
+
 				//
 				// In long running transactions these backend cursors take up memory space
 				// we could close in rs.close(), but if the transaction is closed before the
@@ -774,7 +771,11 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 		}
 
 		// Do the actual fetch.
-		connection.getQueryExecutor().fetch(cursor, new CursorResultHandler(), fetchRows);
+		try {
+			connection.getQueryExecutor().fetch(cursor, new CursorResultHandler(), fetchRows).get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new SQLException(e);
+		}
 
 		// Now prepend our one saved row and move to it.
 		rows.add(0, this_row);
@@ -1743,7 +1744,11 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 			}
 
 			// Execute the fetch and update this resultset.
-			connection.getQueryExecutor().fetch(cursor, new CursorResultHandler(), fetchRows);
+			try {
+				connection.getQueryExecutor().fetch(cursor, new CursorResultHandler(), fetchRows).get();
+			} catch (InterruptedException | ExecutionException e) {
+				throw new SQLException(e);
+			}
 
 			current_row = 0;
 

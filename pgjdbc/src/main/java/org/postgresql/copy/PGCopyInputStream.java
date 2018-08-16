@@ -13,7 +13,9 @@ import org.postgresql.util.PSQLState;
 import java.io.IOException;
 import java.io.InputStream;
 import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import static com.ea.async.Async.await;
 
 /**
  * InputStream for reading from a PostgreSQL COPY TO STDOUT operation
@@ -46,23 +48,23 @@ public class PGCopyInputStream extends InputStream implements CopyOut {
     this.op = op;
   }
 
-  private boolean gotBuf() throws IOException {
+  private CompletableFuture<Boolean> gotBuf() throws IOException {
     if (at >= len) {
       try {
-        buf = op.readFromCopy();
+        buf = await(op.readFromCopy());
       } catch (SQLException sqle) {
         throw new IOException(GT.tr("Copying from database failed: {0}", sqle));
       }
       if (buf == null) {
         at = -1;
-        return false;
+        return  CompletableFuture.completedFuture(false);
       } else {
         at = 0;
         len = buf.length;
-        return true;
+        return  CompletableFuture.completedFuture(true);
       }
     }
-    return buf != null;
+    return CompletableFuture.completedFuture(buf != null);
   }
 
   private void checkClosed() throws IOException {
@@ -79,7 +81,11 @@ public class PGCopyInputStream extends InputStream implements CopyOut {
 
   public int read() throws IOException {
     checkClosed();
-    return gotBuf() ? buf[at++] : -1;
+    try {
+		return gotBuf().get() ? buf[at++] : -1;
+	} catch (InterruptedException | ExecutionException e) {
+		throw new IOException(e);
+	}
   }
 
   public int read(byte[] buf) throws IOException {
@@ -90,16 +96,20 @@ public class PGCopyInputStream extends InputStream implements CopyOut {
     checkClosed();
     int got = 0;
     boolean didReadSomething = false;
-    while (got < siz && (didReadSomething = gotBuf())) {
-      buf[off + got++] = this.buf[at++];
-    }
+    try {
+		while (got < siz && (didReadSomething = gotBuf().get())) {
+		  buf[off + got++] = this.buf[at++];
+		}
+	} catch (InterruptedException | ExecutionException e) {
+		throw new IOException(e);
+	}
     return got == 0 && !didReadSomething ? -1 : got;
   }
 
-  public byte[] readFromCopy() throws SQLException {
+  public CompletableFuture<byte[]> readFromCopy() throws SQLException {
     byte[] result = buf;
     try {
-      if (gotBuf()) {
+      if (await(gotBuf())) {
         if (at > 0 || len < buf.length) {
           byte[] ba = new byte[len - at];
           for (int i = at; i < len; i++) {
@@ -112,11 +122,11 @@ public class PGCopyInputStream extends InputStream implements CopyOut {
     } catch (IOException ioe) {
       throw new PSQLException(GT.tr("Read from copy failed."), PSQLState.CONNECTION_FAILURE);
     }
-    return result;
+    return CompletableFuture.completedFuture(result);
   }
 
   @Override
-  public byte[] readFromCopy(boolean block) throws SQLException {
+  public CompletableFuture<byte[]> readFromCopy(boolean block) throws SQLException {
     return readFromCopy();
   }
 
@@ -128,7 +138,11 @@ public class PGCopyInputStream extends InputStream implements CopyOut {
 
     if (op.isActive()) {
       try {
-        op.cancelCopy();
+        try {
+			op.cancelCopy().get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new SQLException(e);
+		}
       } catch (SQLException se) {
         IOException ioe = new IOException("Failed to close copy reader.");
         ioe.initCause(se);
@@ -138,8 +152,8 @@ public class PGCopyInputStream extends InputStream implements CopyOut {
     op = null;
   }
 
-  public void cancelCopy() throws SQLException {
-    op.cancelCopy();
+  public CompletableFuture<Void> cancelCopy() throws SQLException {
+   return op.cancelCopy();
   }
 
   public int getFormat() {

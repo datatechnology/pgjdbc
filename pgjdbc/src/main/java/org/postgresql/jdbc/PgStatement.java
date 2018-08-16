@@ -368,11 +368,7 @@ public class PgStatement implements Statement, BaseStatement {
 	protected final void execute(CachedQuery cachedQuery, ParameterList queryParameters, int flags)
 			throws SQLException {
 		try {
-			try {
-				executeInternal(cachedQuery, queryParameters, flags).get();
-			} catch (InterruptedException | ExecutionException e) {
-				throw new SQLException(e);
-			}
+			executeInternal(cachedQuery, queryParameters, flags);
 		} catch (SQLException e) {
 			// Don't retry composite queries as it might get partially executed
 			if (cachedQuery.query.getSubqueries() != null || !connection.getQueryExecutor().willHealOnRetry(e)) {
@@ -381,15 +377,11 @@ public class PgStatement implements Statement, BaseStatement {
 			}
 			cachedQuery.query.close();
 			// Execute the query one more time
-			try {
-				executeInternal(cachedQuery, queryParameters, flags).get();
-			} catch (InterruptedException | ExecutionException e1) {
-				throw new SQLException(e);
-			}
+			executeInternal(cachedQuery, queryParameters, flags);
 		}
 	}
 
-	private CompletableFuture<Void> executeInternal(CachedQuery cachedQuery, ParameterList queryParameters, int flags)
+	private void executeInternal(CachedQuery cachedQuery, ParameterList queryParameters, int flags)
 			throws SQLException {
 		closeForNextExecution();
 
@@ -438,7 +430,11 @@ public class PgStatement implements Statement, BaseStatement {
 			// thus sending a describe request.
 			int flags2 = flags | QueryExecutor.QUERY_DESCRIBE_ONLY;
 			StatementResultHandler handler2 = new StatementResultHandler();
-			await(connection.getQueryExecutor().execute(queryToExecute, queryParameters, handler2, 0, 0, flags2));
+			try {
+				connection.getQueryExecutor().execute(queryToExecute, queryParameters, handler2, 0, 0, flags2).get();
+			} catch (InterruptedException | ExecutionException e) {
+				throw new SQLException(e);
+			}
 			ResultWrapper result2 = handler2.getResults();
 			if (result2 != null) {
 				result2.getResultSet().close();
@@ -451,8 +447,12 @@ public class PgStatement implements Statement, BaseStatement {
 		}
 		try {
 			startTimer();
-			await(connection.getQueryExecutor().execute(queryToExecute, queryParameters, handler, maxrows, fetchSize,
-					flags));
+			try {
+				connection.getQueryExecutor().execute(queryToExecute, queryParameters, handler, maxrows, fetchSize,
+						flags).get();
+			} catch (InterruptedException | ExecutionException e) {
+				throw new SQLException(e);
+			}
 		} finally {
 			killTimerTask();
 		}
@@ -469,7 +469,6 @@ public class PgStatement implements Statement, BaseStatement {
 				}
 			}
 		}
-		return CompletableFuture.completedFuture(null);
 	}
 
 	public void setCursorName(String name) throws SQLException {

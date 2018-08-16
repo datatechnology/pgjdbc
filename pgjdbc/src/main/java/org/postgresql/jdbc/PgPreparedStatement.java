@@ -66,7 +66,9 @@ import java.util.Calendar;
 import java.util.Map;
 import java.util.TimeZone;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import static com.ea.async.Async.await;
 
 class PgPreparedStatement extends PgStatement implements PreparedStatement {
 	protected final CachedQuery preparedQuery; // Query fragments for prepared statement.
@@ -627,7 +629,11 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 			if (in instanceof Blob) {
 				setBlob(parameterIndex, (Blob) in);
 			} else if (in instanceof InputStream) {
-				long oid = createBlob(parameterIndex, (InputStream) in, -1);
+				try {
+					long oid = createBlob(parameterIndex, (InputStream) in, -1).get();
+				} catch (InterruptedException | ExecutionException e) {
+					throw new SQLException(e);
+				}
 
 			} else {
 				throw new PSQLException(
@@ -1060,7 +1066,11 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 			int flags = QueryExecutor.QUERY_ONESHOT | QueryExecutor.QUERY_DESCRIBE_ONLY
 					| QueryExecutor.QUERY_SUPPRESS_BEGIN;
 			StatementResultHandler handler = new StatementResultHandler();
-			connection.getQueryExecutor().execute(preparedQuery.query, preparedParameters, handler, 0, 0, flags);
+			try {
+				connection.getQueryExecutor().execute(preparedQuery.query, preparedParameters, handler, 0, 0, flags).get();
+			} catch (InterruptedException | ExecutionException e) {
+				throw new SQLException(e);
+			}
 			ResultWrapper wrapper = handler.getResults();
 			if (wrapper != null) {
 				rs = wrapper.getResultSet();
@@ -1103,14 +1113,10 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 		setString(i, x.toString(), oid);
 	}
 
-	protected long createBlob(int i, InputStream inputStream, long length) throws SQLException {
+	protected CompletableFuture<Long> createBlob(int i, InputStream inputStream, long length) throws SQLException {
 		LargeObjectManager lom = connection.getLargeObjectAPI();
 		long oid = 0;
-		try {
-			oid = lom.createLO().get();
-		} catch (InterruptedException | ExecutionException e1) {
-			throw new SQLException(e1);
-		}
+		oid = await(lom.createLO());
 		LargeObject lob = null;
 		try {
 			lob = lom.open(oid);
@@ -1144,7 +1150,7 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 			}
 		}
 
-		return oid;
+		return CompletableFuture.completedFuture(oid);
 	}
 
 	public void setBlob(int i, Blob x) throws SQLException {
@@ -1157,9 +1163,13 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 
 		InputStream inStream = x.getBinaryStream();
 		try {
-			long oid;
-			oid = createBlob(i, inStream, x.length());
-			setLong(i, oid);
+			
+			try {
+				long oid = createBlob(i, inStream, x.length()).get();
+				setLong(i, oid);
+			} catch (InterruptedException | ExecutionException e) {
+				throw new SQLException(e);
+			}
 
 		} finally {
 			try {
@@ -1499,7 +1509,12 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 			throw new PSQLException(GT.tr("Invalid stream length {0}.", length), PSQLState.INVALID_PARAMETER_VALUE);
 		}
 
-		long oid = createBlob(parameterIndex, inputStream, length);
+		long oid;
+		try {
+			oid = createBlob(parameterIndex, inputStream, length).get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new SQLException(e);
+		}
 		setLong(parameterIndex, oid);
 	}
 
@@ -1511,7 +1526,12 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 			return;
 		}
 
-		long oid = createBlob(parameterIndex, inputStream, -1);
+		long oid;
+		try {
+			oid = createBlob(parameterIndex, inputStream, -1).get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new SQLException(e);
+		}
 		setLong(parameterIndex, oid);
 	}
 
@@ -1585,7 +1605,11 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 		int flags = QueryExecutor.QUERY_ONESHOT | QueryExecutor.QUERY_DESCRIBE_ONLY
 				| QueryExecutor.QUERY_SUPPRESS_BEGIN;
 		StatementResultHandler handler = new StatementResultHandler();
-		connection.getQueryExecutor().execute(preparedQuery.query, preparedParameters, handler, 0, 0, flags);
+		try {
+			connection.getQueryExecutor().execute(preparedQuery.query, preparedParameters, handler, 0, 0, flags).get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new SQLException(e);
+		}
 
 		int[] oids = preparedParameters.getTypeOIDs();
 		if (oids != null) {

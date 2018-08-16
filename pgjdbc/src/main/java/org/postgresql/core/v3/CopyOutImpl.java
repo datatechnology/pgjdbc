@@ -8,7 +8,8 @@ package org.postgresql.core.v3;
 import org.postgresql.copy.CopyOut;
 
 import java.sql.SQLException;
-
+import java.util.concurrent.CompletableFuture;
+import static com.ea.async.Async.await;
 /**
  * Anticipated flow of a COPY TO STDOUT operation:
  *
@@ -26,15 +27,16 @@ import java.sql.SQLException;
 public class CopyOutImpl extends CopyOperationImpl implements CopyOut {
   private byte[] currentDataRow;
 
-  public byte[] readFromCopy() throws SQLException {
+  public CompletableFuture<byte[]> readFromCopy() throws SQLException {
     return readFromCopy(true);
   }
 
   @Override
-  public byte[] readFromCopy(boolean block) throws SQLException {
+  public CompletableFuture<byte[]> readFromCopy(boolean block) throws SQLException {
     currentDataRow = null;
-    queryExecutor.readFromCopy(this, block);
-    return currentDataRow;
+    await(queryExecutor.readFromCopy(this, block));
+    // TODO bug? currentDataRow always null
+    return CompletableFuture.completedFuture(currentDataRow);
   }
 
   protected void handleCopydata(byte[] data) {
