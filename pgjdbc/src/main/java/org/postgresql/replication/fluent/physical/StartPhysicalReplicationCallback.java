@@ -8,7 +8,8 @@ package org.postgresql.replication.fluent.physical;
 import org.postgresql.replication.PGReplicationStream;
 
 import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
 
 public interface StartPhysicalReplicationCallback {
-  PGReplicationStream start(PhysicalReplicationOptions options) throws SQLException;
+  CompletableFuture<PGReplicationStream> start(PhysicalReplicationOptions options) throws SQLException;
 }

@@ -17,9 +17,13 @@ import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.sql.SQLException;
 import java.util.Date;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import static com.ea.async.Async.await;
+
 
 public class V3PGReplicationStream implements PGReplicationStream {
 
@@ -62,18 +66,18 @@ public class V3PGReplicationStream implements PGReplicationStream {
   }
 
   @Override
-  public ByteBuffer read() throws SQLException {
+  public CompletableFuture<ByteBuffer> read() throws SQLException {
     checkClose();
 
     ByteBuffer payload = null;
     while (payload == null && copyDual.isActive()) {
-      payload = readInternal(true);
+      payload = await(readInternal(true));
     }
 
-    return payload;
+    return CompletableFuture.completedFuture(payload);
   }
 
-  public ByteBuffer readPending() throws SQLException {
+  public CompletableFuture<ByteBuffer> readPending() throws SQLException {
     checkClose();
     return readInternal(false);
   }
@@ -104,9 +108,9 @@ public class V3PGReplicationStream implements PGReplicationStream {
   }
 
   @Override
-  public void forceUpdateStatus() throws SQLException {
+  public CompletableFuture<Void> forceUpdateStatus() throws SQLException {
     checkClose();
-    updateStatusInternal(lastReceiveLSN, lastFlushedLSN, lastAppliedLSN, true);
+    return updateStatusInternal(lastReceiveLSN, lastFlushedLSN, lastAppliedLSN, true);
   }
 
   @Override
@@ -114,14 +118,14 @@ public class V3PGReplicationStream implements PGReplicationStream {
     return closeFlag || !copyDual.isActive();
   }
 
-  private ByteBuffer readInternal(boolean block) throws SQLException {
+  private CompletableFuture<ByteBuffer> readInternal(boolean block) throws SQLException {
     boolean updateStatusRequired = false;
     while (copyDual.isActive()) {
       if (updateStatusRequired || isTimeUpdate()) {
-        timeUpdateStatus();
+        await(timeUpdateStatus());
       }
 
-      ByteBuffer buffer = receiveNextData(block);
+      ByteBuffer buffer = await(receiveNextData(block));
 
       if (buffer == null) {
         return null;
@@ -137,7 +141,7 @@ public class V3PGReplicationStream implements PGReplicationStream {
           break;
 
         case 'w': //XLogData
-          return processXLogData(buffer);
+          return CompletableFuture.completedFuture(processXLogData(buffer));
 
         default:
           throw new PSQLException(
@@ -147,21 +151,21 @@ public class V3PGReplicationStream implements PGReplicationStream {
       }
     }
 
-    return null;
+    return CompletableFuture.completedFuture(null);
   }
 
-  private ByteBuffer receiveNextData(boolean block) throws SQLException {
+  private CompletableFuture<ByteBuffer> receiveNextData(boolean block) throws SQLException {
     try {
-      byte[] message = copyDual.readFromCopy(block);
+      byte[] message = await(copyDual.readFromCopy(block));
       if (message != null) {
-        return ByteBuffer.wrap(message);
+        return CompletableFuture.completedFuture(ByteBuffer.wrap(message));
       } else {
-        return null;
+        return CompletableFuture.completedFuture(null);
       }
     } catch (PSQLException e) { //todo maybe replace on thread sleep?
       if (e.getCause() instanceof SocketTimeoutException) {
         //signal for keep alive
-        return null;
+        return CompletableFuture.completedFuture(null);
       }
 
       throw e;
@@ -177,19 +181,20 @@ public class V3PGReplicationStream implements PGReplicationStream {
     return diff >= updateInterval;
   }
 
-  private void timeUpdateStatus() throws SQLException {
-    updateStatusInternal(lastReceiveLSN, lastFlushedLSN, lastAppliedLSN, false);
+  private CompletableFuture<Void> timeUpdateStatus() throws SQLException {
+    return updateStatusInternal(lastReceiveLSN, lastFlushedLSN, lastAppliedLSN, false);
   }
 
-  private void updateStatusInternal(
+  private CompletableFuture<Void> updateStatusInternal(
       LogSequenceNumber received, LogSequenceNumber flushed, LogSequenceNumber applied,
       boolean replyRequired)
       throws SQLException {
     byte[] reply = prepareUpdateStatus(received, flushed, applied, replyRequired);
-    copyDual.writeToCopy(reply, 0, reply.length);
-    copyDual.flushCopy();
+    await(copyDual.writeToCopy(reply, 0, reply.length));
+    await(copyDual.flushCopy());
 
     lastStatusUpdate = System.currentTimeMillis();
+	return CompletableFuture.completedFuture(null);
   }
 
   private byte[] prepareUpdateStatus(LogSequenceNumber received, LogSequenceNumber flushed,
@@ -278,7 +283,11 @@ public class V3PGReplicationStream implements PGReplicationStream {
 
     LOGGER.log(Level.FINEST, " FE=> StopReplication");
 
-    copyDual.endCopy();
+    try {
+		copyDual.endCopy().get();
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	}
 
     closeFlag = true;
   }

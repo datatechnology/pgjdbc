@@ -183,7 +183,11 @@ public class LargeObject
       // finally close
       FastpathArg[] args = new FastpathArg[1];
       args[0] = new FastpathArg(fd);
-      fp.fastpath("lo_close", args); // true here as we dont care!!
+      try {
+		fp.fastpath("lo_close", args).get();
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	} // true here as we dont care!!
       closed = true;
       if (this.commitOnClose) {
         this.conn.commit();
@@ -250,7 +254,11 @@ public class LargeObject
     FastpathArg[] args = new FastpathArg[2];
     args[0] = new FastpathArg(fd);
     args[1] = new FastpathArg(buf, off, len);
-    fp.fastpath("lowrite", args);
+    try {
+		fp.fastpath("lowrite", args).get();
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	}
   }
 
   /**
@@ -299,8 +307,8 @@ public class LargeObject
    * @param pos position within object from begining
    * @throws SQLException if a database-access error occurs.
    */
-  public void seek(int pos) throws SQLException {
-    seek(pos, SEEK_SET);
+  public CompletableFuture<Void> seek(int pos) throws SQLException {
+    return seek(pos, SEEK_SET);
   }
 
   /**
@@ -335,9 +343,9 @@ public class LargeObject
    */
   public CompletableFuture<Integer> size() throws SQLException {
     int cp = await(tell());
-    seek(0, SEEK_END);
+    await(seek(0, SEEK_END));
     int sz = await(tell());
-    seek(cp, SEEK_SET);
+    await(seek(cp, SEEK_SET));
     return CompletableFuture.completedFuture(sz);
   }
 
@@ -349,9 +357,9 @@ public class LargeObject
    */
   public CompletableFuture<Long> size64() throws SQLException {
     long cp = await(tell64());
-    seek64(0, SEEK_END);
+    await(seek64(0, SEEK_END));
     long sz = await(tell64());
-    seek64(cp, SEEK_SET);
+    await(seek64(cp, SEEK_SET));
     return CompletableFuture.completedFuture(sz);
   }
 
@@ -367,7 +375,11 @@ public class LargeObject
     FastpathArg[] args = new FastpathArg[2];
     args[0] = new FastpathArg(fd);
     args[1] = new FastpathArg(len);
-    fp.getInteger("lo_truncate", args);
+    try {
+		fp.getInteger("lo_truncate", args).get();
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	}
   }
 
   /**
@@ -382,7 +394,11 @@ public class LargeObject
     FastpathArg[] args = new FastpathArg[2];
     args[0] = new FastpathArg(fd);
     args[1] = new FastpathArg(len);
-    fp.getInteger("lo_truncate64", args);
+    try {
+		fp.getInteger("lo_truncate64", args).get();
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	}
   }
 
   /**

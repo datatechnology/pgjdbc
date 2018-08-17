@@ -11,9 +11,7 @@ import org.postgresql.util.PSQLException;
 import org.postgresql.util.PSQLState;
 
 import java.sql.SQLException;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import static com.ea.async.Async.await;
 
 public class PgBlob extends AbstractBlobClob implements java.sql.Blob {
 
@@ -50,7 +48,7 @@ public class PgBlob extends AbstractBlobClob implements java.sql.Blob {
       throws SQLException {
     assertPosition(pos);
     try {
-		getLo(true).get().seek((int) (pos - 1));
+		getLo(true).get().seek((int) (pos - 1)).get();
 	} catch (InterruptedException | ExecutionException e) {
 		throw new SQLException(e);
 	}

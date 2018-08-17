@@ -214,7 +214,7 @@ public class TypeInfoCache implements TypeInfo {
 		_getTypeInfoStatement.setString(1, pgTypeName);
 
 		// Go through BaseStatement to avoid transaction start.
-		if (!await(((BaseStatement) _getTypeInfoStatement).executeWithFlags(QueryExecutor.QUERY_SUPPRESS_BEGIN))) {
+		if (!((BaseStatement)_getTypeInfoStatement).executeWithFlags(QueryExecutor.QUERY_SUPPRESS_BEGIN)) {
 			throw new PSQLException(GT.tr("No results were returned by the query."), PSQLState.NO_DATA);
 		}
 
@@ -352,7 +352,7 @@ public class TypeInfoCache implements TypeInfo {
 		PreparedStatement oidStatement = getOidStatement(pgTypeName);
 
 		// Go through BaseStatement to avoid transaction start.
-		if (!await(((BaseStatement) oidStatement).executeWithFlags(QueryExecutor.QUERY_SUPPRESS_BEGIN))) {
+		if (!((BaseStatement) oidStatement).executeWithFlags(QueryExecutor.QUERY_SUPPRESS_BEGIN)) {
 			throw new PSQLException(GT.tr("No results were returned by the query."), PSQLState.NO_DATA);
 		}
 
@@ -391,7 +391,7 @@ public class TypeInfoCache implements TypeInfo {
 		_getNameStatement.setInt(1, oid);
 
 		// Go through BaseStatement to avoid transaction start.
-		if (!await(((BaseStatement) _getNameStatement).executeWithFlags(QueryExecutor.QUERY_SUPPRESS_BEGIN))) {
+		if (!((BaseStatement) _getNameStatement).executeWithFlags(QueryExecutor.QUERY_SUPPRESS_BEGIN)) {
 			throw new PSQLException(GT.tr("No results were returned by the query."), PSQLState.NO_DATA);
 		}
 
@@ -465,7 +465,7 @@ public class TypeInfoCache implements TypeInfo {
 		_getArrayDelimiterStatement.setInt(1, oid);
 
 		// Go through BaseStatement to avoid transaction start.
-		if (!await(((BaseStatement) _getArrayDelimiterStatement).executeWithFlags(QueryExecutor.QUERY_SUPPRESS_BEGIN))) {
+		if (!((BaseStatement) _getArrayDelimiterStatement).executeWithFlags(QueryExecutor.QUERY_SUPPRESS_BEGIN)) {
 			throw new PSQLException(GT.tr("No results were returned by the query."), PSQLState.NO_DATA);
 		}
 
@@ -506,7 +506,7 @@ public class TypeInfoCache implements TypeInfo {
 		_getArrayElementOidStatement.setInt(1, oid);
 
 		// Go through BaseStatement to avoid transaction start.
-		if (!await(((BaseStatement) _getArrayElementOidStatement).executeWithFlags(QueryExecutor.QUERY_SUPPRESS_BEGIN))) {
+		if (!((BaseStatement) _getArrayElementOidStatement).executeWithFlags(QueryExecutor.QUERY_SUPPRESS_BEGIN)) {
 			throw new PSQLException(GT.tr("No results were returned by the query."), PSQLState.NO_DATA);
 		}
 

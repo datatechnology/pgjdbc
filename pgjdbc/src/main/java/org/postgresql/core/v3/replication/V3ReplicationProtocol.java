@@ -21,8 +21,10 @@ import org.postgresql.util.PSQLState;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import static com.ea.async.Async.await;
 
 public class V3ReplicationProtocol implements ReplicationProtocol {
 
@@ -35,34 +37,34 @@ public class V3ReplicationProtocol implements ReplicationProtocol {
     this.pgStream = pgStream;
   }
 
-  public PGReplicationStream startLogical(LogicalReplicationOptions options)
+  public CompletableFuture<PGReplicationStream> startLogical(LogicalReplicationOptions options)
       throws SQLException {
 
     String query = createStartLogicalQuery(options);
     return initializeReplication(query, options, ReplicationType.LOGICAL);
   }
 
-  public PGReplicationStream startPhysical(PhysicalReplicationOptions options)
+  public CompletableFuture<PGReplicationStream> startPhysical(PhysicalReplicationOptions options)
       throws SQLException {
 
     String query = createStartPhysicalQuery(options);
     return initializeReplication(query, options, ReplicationType.PHYSICAL);
   }
 
-  private PGReplicationStream initializeReplication(String query, CommonOptions options,
+  private CompletableFuture<PGReplicationStream> initializeReplication(String query, CommonOptions options,
       ReplicationType replicationType)
       throws SQLException {
     LOGGER.log(Level.FINEST, " FE=> StartReplication(query: {0})", query);
 
     configureSocketTimeout(options);
-    CopyDual copyDual = (CopyDual) queryExecutor.startCopy(query, true);
+    CopyDual copyDual = (CopyDual) await(queryExecutor.startCopy(query, true));
 
-    return new V3PGReplicationStream(
+    return CompletableFuture.completedFuture(new V3PGReplicationStream(
         copyDual,
         options.getStartLSNPosition(),
         options.getStatusInterval(),
         replicationType
-    );
+    ));
   }
 
   /**

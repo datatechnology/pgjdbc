@@ -79,13 +79,13 @@ public class LogicalReplicationStatusTest {
             .logical()
             .withSlotName(SLOT_NAME)
             .withStartPosition(startLSN)
-            .start();
+            .start().get();
 
     final int countMessage = 3;
 
     List<String> received = receiveMessageWithoutBlock(stream, countMessage);
     LogSequenceNumber lastReceivedLSN = stream.getLastReceiveLSN();
-    stream.forceUpdateStatus();
+    stream.forceUpdateStatus().get();
 
     LogSequenceNumber sentByServer = getSentLocationOnView();
 
@@ -116,7 +116,7 @@ public class LogicalReplicationStatusTest {
             .logical()
             .withSlotName(SLOT_NAME)
             .withStartPosition(startLSN)
-            .start();
+            .start().get();
 
     receiveMessageWithoutBlock(stream, 1);
     LogSequenceNumber firstLSN = stream.getLastReceiveLSN();
@@ -146,11 +146,11 @@ public class LogicalReplicationStatusTest {
             .logical()
             .withSlotName(SLOT_NAME)
             .withStartPosition(startLSN)
-            .start();
+            .start().get();
 
     receiveMessageWithoutBlock(stream, 2);
     LogSequenceNumber lastReceivedLSN = stream.getLastReceiveLSN();
-    stream.forceUpdateStatus();
+    stream.forceUpdateStatus().get();
 
     assertThat(
         "Replication stream by execute forceUpdateStatus should send to view actual received position "
@@ -176,10 +176,10 @@ public class LogicalReplicationStatusTest {
             .logical()
             .withSlotName(SLOT_NAME)
             .withStartPosition(startLSN)
-            .start();
+            .start().get();
 
     receiveMessageWithoutBlock(stream, 2);
-    stream.forceUpdateStatus();
+    stream.forceUpdateStatus().get();
 
     LogSequenceNumber writeLocation = getWriteLocationOnView();
     LogSequenceNumber sentLocation = getSentLocationOnView();
@@ -209,7 +209,7 @@ public class LogicalReplicationStatusTest {
             .logical()
             .withSlotName(SLOT_NAME)
             .withStartPosition(startLSN)
-            .start();
+            .start().get();
 
     receiveMessageWithoutBlock(stream, 1);
 
@@ -219,7 +219,7 @@ public class LogicalReplicationStatusTest {
     //consume another messages
     receiveMessageWithoutBlock(stream, 2);
 
-    stream.forceUpdateStatus();
+    stream.forceUpdateStatus().get();
 
     LogSequenceNumber result = getFlushLocationOnView();
 
@@ -249,7 +249,7 @@ public class LogicalReplicationStatusTest {
             .logical()
             .withSlotName(SLOT_NAME)
             .withStartPosition(startLSN)
-            .start();
+            .start().get();
 
     receiveMessageWithoutBlock(stream, 1);
     final LogSequenceNumber flushLSN = stream.getLastReceiveLSN();
@@ -282,7 +282,7 @@ public class LogicalReplicationStatusTest {
             .logical()
             .withSlotName(SLOT_NAME)
             .withStartPosition(startLSN)
-            .start();
+            .start().get();
 
     receiveMessageWithoutBlock(stream, 1);
     final LogSequenceNumber applyLSN = stream.getLastReceiveLSN();
@@ -291,7 +291,7 @@ public class LogicalReplicationStatusTest {
     stream.setFlushedLSN(applyLSN);
 
     receiveMessageWithoutBlock(stream, 2);
-    stream.forceUpdateStatus();
+    stream.forceUpdateStatus().get();
 
     LogSequenceNumber result = getReplayLocationOnView();
 
@@ -324,7 +324,7 @@ public class LogicalReplicationStatusTest {
             .logical()
             .withSlotName(SLOT_NAME)
             .withStartPosition(startLSN)
-            .start();
+            .start().get();
 
     receiveMessageWithoutBlock(stream, 1);
     stream.setAppliedLSN(stream.getLastReceiveLSN());
@@ -334,7 +334,7 @@ public class LogicalReplicationStatusTest {
     stream.setFlushedLSN(stream.getLastReceiveLSN());
 
     receiveMessageWithoutBlock(stream, 1);
-    stream.forceUpdateStatus();
+    stream.forceUpdateStatus().get();
 
 
     LogSequenceNumber flushed = getFlushLocationOnView();
@@ -363,7 +363,7 @@ public class LogicalReplicationStatusTest {
             .logical()
             .withSlotName(SLOT_NAME)
             .withStartPosition(startLSN)
-            .start();
+            .start().get();
 
     receiveMessageWithoutBlock(stream, 1);
     final LogSequenceNumber applyLSN = stream.getLastReceiveLSN();
@@ -400,7 +400,7 @@ public class LogicalReplicationStatusTest {
             .withSlotName(SLOT_NAME)
             .withStartPosition(startLSN)
             .withStatusInterval(intervalTime, timeFormat)
-            .start();
+            .start().get();
 
     receiveMessageWithoutBlock(stream, 3);
 
@@ -412,7 +412,7 @@ public class LogicalReplicationStatusTest {
     timeFormat.sleep(intervalTime + 1);
 
     //get pending message and trigger update status by timeout
-    stream.readPending();
+    stream.readPending().get();
 
     LogSequenceNumber flushLSN = getFlushLocationOnView();
 
@@ -449,7 +449,7 @@ public class LogicalReplicationStatusTest {
     for (int index = 0; index < count; index++) {
       ByteBuffer message;
       do {
-        message = stream.readPending();
+        message = stream.readPending().get();
 
         if (message == null) {
           TimeUnit.MILLISECONDS.sleep(2);

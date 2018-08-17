@@ -104,7 +104,7 @@ public class CopyTest {
     CopyIn cp = copyAPI.copyIn(sql).get();
     for (String anOrigData : origData) {
       byte[] buf = anOrigData.getBytes();
-      cp.writeToCopy(buf, 0, buf.length);
+      cp.writeToCopy(buf, 0, buf.length).get();
     }
 
     long count1 = cp.endCopy().get();
@@ -113,7 +113,7 @@ public class CopyTest {
     assertEquals(dataRows, count2);
 
     try {
-      cp.cancelCopy();
+      cp.cancelCopy().get();
     } catch (SQLException se) { // should fail with obsolete operation
       if (!PSQLState.OBJECT_NOT_IN_STATE.getState().equals(se.getSQLState())) {
         fail("should have thrown object not in state exception.");
@@ -139,7 +139,11 @@ public class CopyTest {
   @Test
   public void testCopyInFromInputStream() throws SQLException, IOException {
     String sql = "COPY copytest FROM STDIN";
-    copyAPI.copyIn(sql, new ByteArrayInputStream(getData(origData)), 3);
+    try {
+		copyAPI.copyIn(sql, new ByteArrayInputStream(getData(origData)), 3).get();
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	}
     int rowCount = getCount();
     assertEquals(dataRows, rowCount);
   }
@@ -152,7 +156,7 @@ public class CopyTest {
         public int read() {
           throw new RuntimeException("COPYTEST");
         }
-      }, 3);
+      }, 3).get();
     } catch (Exception e) {
       if (!e.toString().contains("COPYTEST")) {
         fail("should have failed trying to read from our bogus stream.");
@@ -165,7 +169,11 @@ public class CopyTest {
   @Test
   public void testCopyInFromReader() throws SQLException, IOException {
     String sql = "COPY copytest FROM STDIN";
-    copyAPI.copyIn(sql, new StringReader(new String(getData(origData))), 3);
+    try {
+		copyAPI.copyIn(sql, new StringReader(new String(getData(origData))), 3).get();
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	}
     int rowCount = getCount();
     assertEquals(dataRows, rowCount);
   }
@@ -185,7 +193,7 @@ public class CopyTest {
         ins.skip(skip++);
         skipChar = ins.read();
         at = "copying";
-        copyAPI.copyIn(sql, ins, 3);
+        copyAPI.copyIn(sql, ins, 3).get();
         at = "using connection after writing copy";
         rowCount = getCount();
       }
@@ -205,7 +213,7 @@ public class CopyTest {
     CopyOut cp = copyAPI.copyOut(sql).get();
     int count = 0;
     byte[] buf;
-    while ((buf = cp.readFromCopy()) != null) {
+    while ((buf = cp.readFromCopy().get()) != null) {
       count++;
     }
     assertEquals(false, cp.isActive());
@@ -223,7 +231,7 @@ public class CopyTest {
     testCopyInByRow(); // ensure we have some data.
     String sql = "COPY copytest TO STDOUT";
     ByteArrayOutputStream copydata = new ByteArrayOutputStream();
-    copyAPI.copyOut(sql, copydata);
+    copyAPI.copyOut(sql, copydata).get();
     assertEquals(dataRows, getCount());
     // deep comparison of data written and read
     byte[] copybytes = copydata.toByteArray();
@@ -242,7 +250,11 @@ public class CopyTest {
   public void testNonCopyOut() throws SQLException, IOException {
     String sql = "SELECT 1";
     try {
-      copyAPI.copyOut(sql, new ByteArrayOutputStream());
+      try {
+		copyAPI.copyOut(sql, new ByteArrayOutputStream()).get();
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	}
       fail("Can't use a non-copy query.");
     } catch (SQLException sqle) {
     }
@@ -254,7 +266,11 @@ public class CopyTest {
   public void testNonCopyIn() throws SQLException, IOException {
     String sql = "SELECT 1";
     try {
-      copyAPI.copyIn(sql, new ByteArrayInputStream(new byte[0]));
+      try {
+		copyAPI.copyIn(sql, new ByteArrayInputStream(new byte[0])).get();
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	}
       fail("Can't use a non-copy query.");
     } catch (SQLException sqle) {
     }
@@ -324,7 +340,7 @@ public class CopyTest {
       CopyIn cp = manager.copyIn(sql).get();
       for (String anOrigData : origData) {
         byte[] buf = anOrigData.getBytes();
-        cp.writeToCopy(buf, 0, buf.length);
+        cp.writeToCopy(buf, 0, buf.length).get();
       }
 
       long count1 = cp.endCopy().get();
@@ -367,14 +383,14 @@ public class CopyTest {
       killConnection(pid);
       byte[] bunchOfNulls = ",,\n".getBytes();
       while (true) {
-        copyIn.writeToCopy(bunchOfNulls, 0, bunchOfNulls.length);
+        copyIn.writeToCopy(bunchOfNulls, 0, bunchOfNulls.length).get();
       }
     } catch (SQLException e) {
       acceptIOCause(e);
     } finally {
       if (copyIn.isActive()) {
         try {
-          copyIn.cancelCopy();
+          copyIn.cancelCopy().get();
           fail("cancelCopy should have thrown an exception");
         } catch (SQLException e) {
           acceptIOCause(e);

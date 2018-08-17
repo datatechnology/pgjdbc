@@ -35,9 +35,9 @@ public interface BaseConnection extends PGConnection, Connection {
    * @return the (non-null) returned resultset
    * @throws SQLException if something goes wrong.
    */
-  CompletableFuture<ResultSet> execSQLQuery(String s) throws SQLException;
+  ResultSet execSQLQuery(String s) throws SQLException;
 
-  CompletableFuture<ResultSet> execSQLQuery(String s, int resultSetType, int resultSetConcurrency)
+  ResultSet execSQLQuery(String s, int resultSetType, int resultSetConcurrency)
       throws SQLException;
 
   /**
@@ -48,7 +48,7 @@ public interface BaseConnection extends PGConnection, Connection {
  * @return 
    * @throws SQLException if something goes wrong.
    */
-  CompletableFuture<Void> execSQLUpdate(String s) throws SQLException;
+  void execSQLUpdate(String s) throws SQLException;
 
   /**
    * Get the QueryExecutor implementation for this connection.

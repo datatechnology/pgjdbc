@@ -10,6 +10,7 @@ import org.postgresql.replication.PGReplicationStream;
 import org.postgresql.replication.fluent.AbstractStreamBuilder;
 
 import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
 
 public class PhysicalStreamBuilder extends AbstractStreamBuilder<ChainedPhysicalStreamBuilder>
     implements ChainedPhysicalStreamBuilder, PhysicalReplicationOptions {
@@ -30,7 +31,7 @@ public class PhysicalStreamBuilder extends AbstractStreamBuilder<ChainedPhysical
   }
 
   @Override
-  public PGReplicationStream start() throws SQLException {
+  public CompletableFuture<PGReplicationStream> start() throws SQLException {
     return this.startCallback.start(this);
   }
 

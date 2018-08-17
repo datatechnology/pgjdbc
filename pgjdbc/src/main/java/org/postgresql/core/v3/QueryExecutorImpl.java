@@ -65,7 +65,6 @@ import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-
 import static com.ea.async.Async.await;
 
 /**
@@ -296,8 +295,8 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       try {
         handler = sendQueryPreamble(handler, flags);
         autosave = sendAutomaticSavepoint(query, flags);
-        sendQuery(query, (V3ParameterList) parameters, maxRows, fetchSize, flags,
-            handler, null);
+        await(sendQuery(query, (V3ParameterList) parameters, maxRows, fetchSize, flags,
+            handler, null));
         if ((flags & QueryExecutor.QUERY_EXECUTE_AS_SIMPLE) != 0) {
           // Sync message is not required for 'Q' execution as 'Q' ends with ReadyForQuery message
           // on its own
@@ -465,7 +464,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
           parameters = SimpleQuery.NO_PARAMETERS;
         }
 
-        sendQuery(query, parameters, maxRows, fetchSize, flags, handler, batchHandler);
+        await(sendQuery(query, parameters, maxRows, fetchSize, flags, handler, batchHandler));
 
         if (handler.getException() != null) {
           break;
@@ -835,7 +834,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       throws SQLException {
     waitOnLock();
     if (!suppressBegin) {
-      doSubprotocolBegin();
+      await(doSubprotocolBegin());
     }
     byte[] buf = Utils.encodeUTF8(sql);
 
@@ -993,7 +992,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
    * @param siz number of bytes to send (usually data.length)
    * @throws SQLException on failure
    */
-  public synchronized void writeToCopy(CopyOperationImpl op, byte[] data, int off, int siz)
+  public synchronized CompletableFuture<Void> writeToCopy(CopyOperationImpl op, byte[] data, int off, int siz)
       throws SQLException {
     if (!hasLock(op)) {
       throw new PSQLException(GT.tr("Tried to write to an inactive copy operation"),
@@ -1007,14 +1006,16 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       pgStream.sendInteger4(siz + 4);
       pgStream.send(data, off, siz);
 
-      processCopyResults(op, false); // collect any pending notifications without blocking
+      await(processCopyResults(op, false)); // collect any pending notifications without blocking
     } catch (IOException ioe) {
       throw new PSQLException(GT.tr("Database connection failed when writing to copy"),
           PSQLState.CONNECTION_FAILURE, ioe);
     }
+    
+    return CompletableFuture.completedFuture(null);
   }
 
-  public synchronized void flushCopy(CopyOperationImpl op) throws SQLException {
+  public synchronized CompletableFuture<Void> flushCopy(CopyOperationImpl op) throws SQLException {
     if (!hasLock(op)) {
       throw new PSQLException(GT.tr("Tried to write to an inactive copy operation"),
           PSQLState.OBJECT_NOT_IN_STATE);
@@ -1022,7 +1023,8 @@ public class QueryExecutorImpl extends QueryExecutorBase {
 
     try {
       pgStream.flush();
-      processCopyResults(op, false); // collect any pending notifications without blocking
+      await(processCopyResults(op, false)); // collect any pending notifications without blocking
+      return CompletableFuture.completedFuture(null);
     } catch (IOException ioe) {
       throw new PSQLException(GT.tr("Database connection failed when writing to copy"),
           PSQLState.CONNECTION_FAILURE, ioe);
@@ -1037,18 +1039,20 @@ public class QueryExecutorImpl extends QueryExecutorBase {
    * @param block whether to block waiting for input
    * @throws SQLException on any failure
    */
-  synchronized void readFromCopy(CopyOperationImpl op, boolean block) throws SQLException {
+  synchronized CompletableFuture<Void> readFromCopy(CopyOperationImpl op, boolean block) throws SQLException {
     if (!hasLock(op)) {
       throw new PSQLException(GT.tr("Tried to read from inactive copy"),
           PSQLState.OBJECT_NOT_IN_STATE);
     }
 
     try {
-      processCopyResults(op, block); // expect a call to handleCopydata() to store the data
+      await(processCopyResults(op, block)); // expect a call to handleCopydata() to store the data
     } catch (IOException ioe) {
       throw new PSQLException(GT.tr("Database connection failed when reading from copy"),
           PSQLState.CONNECTION_FAILURE, ioe);
     }
+	return CompletableFuture.completedFuture(null);
+    
   }
 
   /**
@@ -1320,7 +1324,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
   /*
    * Send a query to the backend.
    */
-  private void sendQuery(Query query, V3ParameterList parameters, int maxRows, int fetchSize,
+  private CompletableFuture<Void> sendQuery(Query query, V3ParameterList parameters, int maxRows, int fetchSize,
       int flags, ResultHandler resultHandler,
       BatchResultHandler batchHandler) throws IOException, SQLException {
     // Now the query itself.
@@ -1333,7 +1337,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     boolean disallowBatching = (flags & QueryExecutor.QUERY_DISALLOW_BATCHING) != 0;
 
     if (subqueries == null) {
-      flushIfDeadlockRisk(query, disallowBatching, resultHandler, batchHandler, flags);
+      await(flushIfDeadlockRisk(query, disallowBatching, resultHandler, batchHandler, flags));
 
       // If we saw errors, don't send anything more.
       if (resultHandler.getException() == null) {
@@ -1343,7 +1347,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     } else {
       for (int i = 0; i < subqueries.length; ++i) {
         final Query subquery = subqueries[i];
-        flushIfDeadlockRisk(subquery, disallowBatching, resultHandler, batchHandler, flags);
+        await(flushIfDeadlockRisk(subquery, disallowBatching, resultHandler, batchHandler, flags));
 
         // If we saw errors, don't send anything more.
         if (resultHandler.getException() != null) {
@@ -1363,6 +1367,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
         sendOneQuery((SimpleQuery) subquery, subparam, maxRows, fetchSize, flags);
       }
     }
+	return CompletableFuture.completedFuture(null);
   }
 
   //

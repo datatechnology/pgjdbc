@@ -219,7 +219,7 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
                 // Check Master or Secondary
                 HostStatus hostStatus = HostStatus.ConnectOK;
                 if (candidateHost.targetServerType != HostRequirement.any) {
-                    hostStatus = isMaster(queryExecutor) ? HostStatus.Master : HostStatus.Secondary;
+                    hostStatus = await(isMaster(queryExecutor)) ? HostStatus.Master : HostStatus.Secondary;
                 }
                 GlobalHostStatusTracker.reportHostStatus(hostSpec, hostStatus);
                 knownStates.put(hostSpec, hostStatus);
@@ -228,7 +228,7 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
                     continue;
                 }
 
-                runInitialQueries(queryExecutor, info);
+                await(runInitialQueries(queryExecutor, info));
 
                 // And we're done.
                 return CompletableFuture.completedFuture(queryExecutor);
@@ -687,18 +687,18 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
 
     }
 
-    private void runInitialQueries(QueryExecutor queryExecutor, Properties info)
+    private CompletableFuture<Void> runInitialQueries(QueryExecutor queryExecutor, Properties info)
             throws SQLException {
         String assumeMinServerVersion = PGProperty.ASSUME_MIN_SERVER_VERSION.get(info);
         if (Utils.parseServerVersionStr(assumeMinServerVersion) >= ServerVersion.v9_0.getVersionNum()) {
             // We already sent the parameter values in the StartupMessage so skip this
-            return;
+            return CompletableFuture.completedFuture(null);
         }
 
         final int dbVersion = queryExecutor.getServerVersionNum();
 
         if (dbVersion >= ServerVersion.v9_0.getVersionNum()) {
-            SetupQueryRunner.run(queryExecutor, "SET extra_float_digits = 3", false);
+            await(SetupQueryRunner.run(queryExecutor, "SET extra_float_digits = 3", false));
         }
 
         String appName = PGProperty.APPLICATION_NAME.get(info);
@@ -707,14 +707,14 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
             sql.append("SET application_name = '");
             Utils.escapeLiteral(sql, appName, queryExecutor.getStandardConformingStrings());
             sql.append("'");
-            SetupQueryRunner.run(queryExecutor, sql.toString(), false);
+            await(SetupQueryRunner.run(queryExecutor, sql.toString(), false));
         }
-
+        return CompletableFuture.completedFuture(null);
     }
 
-    private boolean isMaster(QueryExecutor queryExecutor) throws SQLException, IOException {
-        byte[][] results = SetupQueryRunner.run(queryExecutor, "show transaction_read_only", true);
+    private CompletableFuture<Boolean> isMaster(QueryExecutor queryExecutor) throws SQLException, IOException {
+        byte[][] results = await(SetupQueryRunner.run(queryExecutor, "show transaction_read_only", true));
         String value = queryExecutor.getEncoding().decode(results[0]);
-        return value.equalsIgnoreCase("off");
+        return CompletableFuture.completedFuture(value.equalsIgnoreCase("off"));
     }
 }

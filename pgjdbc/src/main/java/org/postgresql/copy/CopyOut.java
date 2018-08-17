@@ -6,6 +6,7 @@
 package org.postgresql.copy;
 
 import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
 
 public interface CopyOut extends CopyOperation {
   /**
@@ -14,7 +15,7 @@ public interface CopyOut extends CopyOperation {
    * @return byte array received from server, null if server complete copy operation
    * @throws SQLException if something goes wrong for example socket timeout
    */
-  byte[] readFromCopy() throws SQLException;
+  CompletableFuture<byte[]> readFromCopy() throws SQLException;
 
   /**
    * Wait for a row of data to be received from server on an active copy operation.
@@ -25,5 +26,5 @@ public interface CopyOut extends CopyOperation {
    * blocking mode return null
    * @throws SQLException if something goes wrong for example socket timeout
    */
-  byte[] readFromCopy(boolean block) throws SQLException;
+  CompletableFuture<byte[]> readFromCopy(boolean block) throws SQLException;
 }

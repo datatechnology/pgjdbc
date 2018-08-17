@@ -227,7 +227,7 @@ public class NotifyTest {
     }).start();
 
     try {
-      ((org.postgresql.PGConnection) conn).getNotifications(40000);
+      ((org.postgresql.PGConnection) conn).getNotifications(40000).get();
       Assert.fail("The getNotifications(...) call didn't return when the socket closed.");
     } catch (SQLException e) {
       // We expected thta

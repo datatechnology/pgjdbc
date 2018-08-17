@@ -12,37 +12,38 @@ import java.sql.SQLException;
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
+import static com.ea.async.Async.await;
 
 public class CopyDualImpl extends CopyOperationImpl implements CopyDual {
   private Queue<byte[]> received = new LinkedList<byte[]>();
 
-  public void writeToCopy(byte[] data, int off, int siz) throws SQLException {
-    queryExecutor.writeToCopy(this, data, off, siz);
+  public CompletableFuture<Void> writeToCopy(byte[] data, int off, int siz) throws SQLException {
+    return queryExecutor.writeToCopy(this, data, off, siz);
   }
 
-  public void flushCopy() throws SQLException {
-    queryExecutor.flushCopy(this);
+  public CompletableFuture<Void> flushCopy() throws SQLException {
+	  return queryExecutor.flushCopy(this);
   }
 
   public CompletableFuture<Long> endCopy() throws SQLException {
     return queryExecutor.endCopy(this);
   }
 
-  public byte[] readFromCopy() throws SQLException {
+  public CompletableFuture<byte[]> readFromCopy() throws SQLException {
     if (received.isEmpty()) {
-      queryExecutor.readFromCopy(this, true);
+      await(queryExecutor.readFromCopy(this, true));
     }
 
-    return received.poll();
+    return CompletableFuture.completedFuture(received.poll());
   }
 
   @Override
-  public byte[] readFromCopy(boolean block) throws SQLException {
+  public CompletableFuture<byte[]> readFromCopy(boolean block) throws SQLException {
     if (received.isEmpty()) {
-      queryExecutor.readFromCopy(this, block);
+      await(queryExecutor.readFromCopy(this, block));
     }
 
-    return received.poll();
+    return CompletableFuture.completedFuture(received.poll());
   }
 
   @Override

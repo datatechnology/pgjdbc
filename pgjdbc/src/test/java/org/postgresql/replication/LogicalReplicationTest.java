@@ -38,6 +38,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -97,7 +98,7 @@ public class LogicalReplicationTest {
               .logical()
               .withSlotName("notExistSlotName")
               .withStartPosition(lsn)
-              .start();
+              .start().get();
 
       fail("For logical decoding replication slot name it required parameter "
           + "that should be create on server before start replication");
@@ -130,7 +131,7 @@ public class LogicalReplicationTest {
             .withSlotName(SLOT_NAME)
             .withStartPosition(lsn)
             .withSlotOption("include-xids", false)
-            .start();
+            .start().get();
 
     String result = group(receiveMessage(stream, 3));
 
@@ -164,7 +165,7 @@ public class LogicalReplicationTest {
             .withStartPosition(lsn)
             .withSlotOption("include-xids", false)
             .withSlotOption("skip-empty-xacts", true)
-            .start();
+            .start().get();
 
 
     List<String> result = new ArrayList<String>();
@@ -212,7 +213,7 @@ public class LogicalReplicationTest {
             .withSlotName(SLOT_NAME)
             .withSlotOption("include-xids", false)
             .withSlotOption("skip-empty-xacts", true)
-            .start();
+            .start().get();
 
     Statement st = sqlConnection.createStatement();
     st.execute("insert into test_logic_table(name) values('last server message')");
@@ -243,7 +244,7 @@ public class LogicalReplicationTest {
             .withSlotName(SLOT_NAME)
             .withSlotOption("include-xids", false)
             .withSlotOption("skip-empty-xacts", true)
-            .start();
+            .start().get();
 
     boolean isActive = isActiveOnView();
 
@@ -274,7 +275,7 @@ public class LogicalReplicationTest {
             .withSlotName(SLOT_NAME)
             .withSlotOption("include-xids", false)
             .withSlotOption("skip-empty-xacts", true)
-            .start();
+            .start().get();
 
     boolean isActive = isActiveOnView();
     assumeThat(isActive, equalTo(true));
@@ -303,7 +304,7 @@ public class LogicalReplicationTest {
             .withStartPosition(lsn)
             .withSlotOption("include-xids", false)
             .withSlotOption("skip-empty-xacts", true)
-            .start();
+            .start().get();
 
     boolean isActive = isActiveOnView();
     assumeThat(isActive, equalTo(true));
@@ -353,7 +354,7 @@ public class LogicalReplicationTest {
             .withSlotName(SLOT_NAME)
             .withSlotOption("include-xids", false)
             .withSlotOption("skip-empty-xacts", true)
-            .start();
+            .start().get();
 
     //wait first message
     stream.read();
@@ -403,7 +404,7 @@ public class LogicalReplicationTest {
             .withSlotName(SLOT_NAME)
             .withSlotOption("include-xids", false)
             .withSlotOption("skip-empty-xacts", true)
-            .start();
+            .start().get();
 
     //wait first message
     stream.read();
@@ -437,7 +438,7 @@ public class LogicalReplicationTest {
             .withStartPosition(startLSN)
             .withSlotOption("include-xids", false)
             .withSlotOption("skip-empty-xacts", true)
-            .start();
+            .start().get();
 
     List<String> result = new ArrayList<String>();
     result.addAll(receiveMessage(stream, 3));
@@ -457,7 +458,7 @@ public class LogicalReplicationTest {
             .withStartPosition(startLSN)
             .withSlotOption("include-xids", false)
             .withSlotOption("skip-empty-xacts", true)
-            .start();
+            .start().get();
 
     result.addAll(receiveMessage(stream, 3));
 
@@ -488,9 +489,9 @@ public class LogicalReplicationTest {
             .logical()
             .withSlotName(SLOT_NAME)
             .withStartPosition(getCurrentLSN())
-            .start();
+            .start().get();
 
-    ByteBuffer result = stream.readPending();
+    ByteBuffer result = stream.readPending().get();
 
     assertThat("Read pending message allow without lock on socket read message, "
             + "and if message absent return null. In current test we start replication from last LSN on server, "
@@ -518,7 +519,7 @@ public class LogicalReplicationTest {
             .withStartPosition(startLSN)
             .withSlotOption("include-xids", false)
             .withSlotOption("skip-empty-xacts", true)
-            .start();
+            .start().get();
 
     String received = group(receiveMessageWithoutBlock(stream, 3));
 
@@ -548,7 +549,7 @@ public class LogicalReplicationTest {
             .withStartPosition(getCurrentLSN())
             .withSlotOption("include-xids", false)
             .withSlotOption("skip-empty-xacts", true)
-            .start();
+            .start().get();
 
     Statement st = sqlConnection.createStatement();
     st.execute("insert into test_logic_table(name) values('actual changes')");
@@ -591,10 +592,10 @@ public class LogicalReplicationTest {
                       .withSlotName(SLOT_NAME)
                       .withStartPosition(getCurrentLSN())
                       .withStatusInterval(Math.round(statusInterval / 3), TimeUnit.MILLISECONDS)
-                      .start();
+                      .start().get();
 
               while (!Thread.interrupted()) {
-                stream.read();
+                stream.read().get();
               }
 
               return null;
@@ -630,7 +631,7 @@ public class LogicalReplicationTest {
             .withStartPosition(startLSN)
             .withSlotOption("include-xids", false)
             .withSlotOption("skip-empty-xacts", true)
-            .start();
+            .start().get();
 
     Statement st = sqlConnection.createStatement();
     st.execute("insert into test_logic_table(name) values('first tx changes')");
@@ -658,7 +659,7 @@ public class LogicalReplicationTest {
             .withStartPosition(LogSequenceNumber.INVALID_LSN) /* Invalid LSN indicate for start from restart lsn */
             .withSlotOption("include-xids", false)
             .withSlotOption("skip-empty-xacts", true)
-            .start();
+            .start().get();
 
     consumedData.addAll(receiveMessageWithoutBlock(stream, 3));
     String result = group(consumedData);
@@ -695,7 +696,7 @@ public class LogicalReplicationTest {
             .withStartPosition(startLSN)
             .withSlotOption("include-xids", false)
             .withSlotOption("skip-empty-xacts", true)
-            .start();
+            .start().get();
 
     Statement st = sqlConnection.createStatement();
     st.execute("insert into test_logic_table(name) values('first tx changes')");
@@ -709,7 +710,7 @@ public class LogicalReplicationTest {
     consumedData.addAll(receiveMessageWithoutBlock(stream, 3));
     stream.setFlushedLSN(stream.getLastReceiveLSN());
     stream.setAppliedLSN(stream.getLastReceiveLSN());
-    stream.forceUpdateStatus();
+    stream.forceUpdateStatus().get();
 
     //emulate replication break
     replConnection.close();
@@ -726,7 +727,7 @@ public class LogicalReplicationTest {
             .withStartPosition(LogSequenceNumber.INVALID_LSN) /* Invalid LSN indicate for start from restart lsn */
             .withSlotOption("include-xids", false)
             .withSlotOption("skip-empty-xacts", true)
-            .start();
+            .start().get();
 
     consumedData.addAll(receiveMessageWithoutBlock(stream, 3));
     String result = group(consumedData);
@@ -763,7 +764,7 @@ public class LogicalReplicationTest {
             .withStartPosition(startLSN)
             .withSlotOption("include-xids", false)
             .withSlotOption("skip-empty-xacts", true)
-            .start();
+            .start().get();
 
     Connection tx1Connection = TestUtil.openDB();
     tx1Connection.setAutoCommit(false);
@@ -791,7 +792,7 @@ public class LogicalReplicationTest {
     stream.setFlushedLSN(stream.getLastReceiveLSN());
     stream.setAppliedLSN(stream.getLastReceiveLSN());
 
-    stream.forceUpdateStatus();
+    stream.forceUpdateStatus().get();
 
     //emulate replication break
     replConnection.close();
@@ -808,7 +809,7 @@ public class LogicalReplicationTest {
             .withStartPosition(LogSequenceNumber.INVALID_LSN) /* Invalid LSN indicate for start from restart lsn */
             .withSlotOption("include-xids", false)
             .withSlotOption("skip-empty-xacts", true)
-            .start();
+            .start().get();
 
     Statement st = sqlConnection.createStatement();
     st.execute("insert into test_logic_table(name) values('third tx changes')");
@@ -901,7 +902,11 @@ public class LogicalReplicationTest {
   private List<String> receiveMessage(PGReplicationStream stream, int count) throws SQLException {
     List<String> result = new ArrayList<String>(count);
     for (int index = 0; index < count; index++) {
-      result.add(toString(stream.read()));
+      try {
+		result.add(toString(stream.read().get()));
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	}
     }
 
     return result;
@@ -913,7 +918,7 @@ public class LogicalReplicationTest {
     for (int index = 0; index < count; index++) {
       ByteBuffer message;
       do {
-        message = stream.readPending();
+        message = stream.readPending().get();
 
         if (message == null) {
           TimeUnit.MILLISECONDS.sleep(2);
