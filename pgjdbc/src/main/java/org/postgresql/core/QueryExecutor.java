@@ -326,10 +326,11 @@ public interface QueryExecutor extends TypeTransferModeRegistry {
 
   /**
    * Sends a query cancellation for this connection.
+ * @return 
    *
    * @throws SQLException if something goes wrong.
    */
-  void sendQueryCancel() throws SQLException;
+  CompletableFuture<Void> sendQueryCancel() throws SQLException;
 
   /**
    * Return the process ID (PID) of the backend server process handling this connection.

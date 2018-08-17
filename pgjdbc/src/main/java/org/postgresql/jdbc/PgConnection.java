@@ -984,9 +984,9 @@ public class PgConnection implements BaseConnection {
 	}
 
 	@Override
-	public void cancelQuery() throws SQLException {
+	public CompletableFuture<Void> cancelQuery() throws SQLException {
 		checkClosed();
-		queryExecutor.sendQueryCancel();
+		return queryExecutor.sendQueryCancel();
 	}
 
 	@Override

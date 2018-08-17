@@ -891,7 +891,11 @@ public class PgStatement implements Statement, BaseStatement {
 		// Synchronize on connection to avoid spinning in killTimerTask
 		synchronized (connection) {
 			try {
-				connection.cancelQuery();
+				try {
+					connection.cancelQuery().get();
+				} catch (InterruptedException | ExecutionException e) {
+					throw new SQLException(e);
+				}
 			} finally {
 				STATE_UPDATER.set(this, StatementCancelState.CANCELLED);
 				connection.notifyAll(); // wake-up killTimerTask

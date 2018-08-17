@@ -180,7 +180,7 @@ public abstract class BaseDataSourceTest {
   public void testPGConnection() {
     try {
       con = getDataSourceConnection();
-      ((PGConnection) con).getNotifications();
+      ((PGConnection) con).getNotifications().get();
       con.close();
     } catch (Exception e) {
       fail("Unable to call PGConnection method on pooled connection due to "

@@ -17,9 +17,11 @@ import java.sql.SQLException;
 import java.sql.SQLWarning;
 import java.util.ArrayList;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import static com.ea.async.Async.await;
 
 public abstract class QueryExecutorBase implements QueryExecutor {
 
@@ -142,9 +144,9 @@ public abstract class QueryExecutorBase implements QueryExecutor {
     }
 
     @Override
-    public void sendQueryCancel() throws SQLException {
+    public CompletableFuture<Void> sendQueryCancel() throws SQLException {
         if (cancelPid <= 0) {
-            return;
+            return CompletableFuture.completedFuture(null);
         }
 
         PGStream cancelStream = null;
@@ -171,7 +173,7 @@ public abstract class QueryExecutorBase implements QueryExecutor {
             cancelStream.sendInteger4(cancelPid);
             cancelStream.sendInteger4(cancelKey);
             cancelStream.flush();
-            cancelStream.receiveEOF();
+            await(cancelStream.receiveEOF());
         } catch (IOException | InterruptedException | ExecutionException e) {
             // Safe to ignore.
             LOGGER.log(Level.FINEST, "Ignoring exception on cancel request:", e);
@@ -184,6 +186,7 @@ public abstract class QueryExecutorBase implements QueryExecutor {
                 }
             }
         }
+		return CompletableFuture.completedFuture(null);
     }
 
     public synchronized void addWarning(SQLWarning newWarning) {

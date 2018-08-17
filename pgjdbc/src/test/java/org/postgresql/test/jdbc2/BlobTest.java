@@ -44,7 +44,7 @@ public class BlobTest {
   public void setUp() throws Exception {
     con = TestUtil.openDB();
     TestUtil.createTable(con, "testblob", "id name,lo oid");
-    con.setAutoCommit(false);
+//    con.setAutoCommit(false);
   }
 
   @After

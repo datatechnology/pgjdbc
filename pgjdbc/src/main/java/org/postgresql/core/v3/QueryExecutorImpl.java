@@ -60,6 +60,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -128,7 +129,11 @@ public class QueryExecutorImpl extends QueryExecutorBase {
 
     this.allowEncodingChanges = PGProperty.ALLOW_ENCODING_CHANGES.getBoolean(info);
     this.replicationProtocol = new V3ReplicationProtocol(this, pgStream);
-    readStartupMessages();
+    try {
+		readStartupMessages().get();
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	}
   }
 
   @Override
@@ -921,7 +926,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
           } while (hasLock(op));
         }
       } else if (op instanceof CopyOut) {
-        sendQueryCancel();
+        await(sendQueryCancel());
       }
 
     } catch (IOException ioe) {
