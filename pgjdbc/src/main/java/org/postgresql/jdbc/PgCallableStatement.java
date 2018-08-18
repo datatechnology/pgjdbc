@@ -31,6 +31,7 @@ import java.sql.Types;
 import java.util.Calendar;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import static com.ea.async.Async.await;
 
 class PgCallableStatement extends PgPreparedStatement implements CallableStatement {
 	// Used by the callablestatement style methods

@@ -23,7 +23,7 @@ public class PgBlob extends AbstractBlobClob implements java.sql.Blob {
       throws SQLException {
     checkFreed();
 	try {
-		LargeObject subLO = getLo(false).get().copy();
+		LargeObject subLO = getLo(false).get().copy().get();
 		addSubLO(subLO);
 	    if (pos > Integer.MAX_VALUE) {
 	      subLO.seek64(pos - 1, LargeObject.SEEK_SET).get();
@@ -53,7 +53,7 @@ public class PgBlob extends AbstractBlobClob implements java.sql.Blob {
 		throw new SQLException(e);
 	}
     try {
-		getLo(true).get().write(bytes, offset, len);
+		getLo(true).get().write(bytes, offset, len).get();
 	} catch (InterruptedException | ExecutionException e) {
 		throw new SQLException(e);
 	}

@@ -154,7 +154,11 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 				flags |= QueryExecutor.QUERY_EXECUTE_AS_SIMPLE;
 			}
 
-			execute(preparedQuery, preparedParameters, flags);
+			try {
+				execute(preparedQuery, preparedParameters, flags).get();
+			} catch (InterruptedException | ExecutionException e) {
+				throw new SQLException(e);
+			}
 
 			synchronized (this) {
 				checkClosed();
@@ -1067,7 +1071,8 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 					| QueryExecutor.QUERY_SUPPRESS_BEGIN;
 			StatementResultHandler handler = new StatementResultHandler();
 			try {
-				connection.getQueryExecutor().execute(preparedQuery.query, preparedParameters, handler, 0, 0, flags).get();
+				connection.getQueryExecutor().execute(preparedQuery.query, preparedParameters, handler, 0, 0, flags)
+						.get();
 			} catch (InterruptedException | ExecutionException e) {
 				throw new SQLException(e);
 			}
@@ -1119,7 +1124,7 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 		oid = await(lom.createLO());
 		LargeObject lob = null;
 		try {
-			lob = lom.open(oid);
+			lob = await(lom.open(oid));
 		} catch (InterruptedException | ExecutionException e1) {
 			throw new SQLException(e1);
 		}
@@ -1163,7 +1168,7 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 
 		InputStream inStream = x.getBinaryStream();
 		try {
-			
+
 			try {
 				long oid = createBlob(i, inStream, x.length()).get();
 				setLong(i, oid);
@@ -1237,7 +1242,7 @@ class PgPreparedStatement extends PgStatement implements PreparedStatement {
 		}
 
 		try {
-			LargeObject lob = lom.open(oid);
+			LargeObject lob = lom.open(oid).get();
 			Charset connectionCharset = Charset.forName(connection.getEncoding().name());
 			OutputStream los = lob.getOutputStream();
 			Writer lw = new OutputStreamWriter(los, connectionCharset);

@@ -166,7 +166,7 @@ public class BlobTest {
     LargeObjectManager lom = ((org.postgresql.PGConnection) con).getLargeObjectAPI();
 
     long oid = rs.getLong(1);
-    LargeObject blob = lom.open(oid);
+    LargeObject blob = lom.open(oid).get();
     InputStream bis = blob.getInputStream();
 
     assertEquals('<', bis.read());
@@ -273,7 +273,7 @@ public class BlobTest {
     InputStream fis = getClass().getResourceAsStream(file);
 
     long oid = lom.createLO(LargeObjectManager.READWRITE).get();
-    LargeObject blob = lom.open(oid);
+    LargeObject blob = lom.open(oid).get();
 
     int s;
     int t;
@@ -286,7 +286,7 @@ public class BlobTest {
         t = 0;
         while ((s = fis.read(buf, 0, buf.length)) > 0) {
           t += s;
-          blob.write(buf, 0, s);
+          blob.write(buf, 0, s).get();
         }
         break;
 
@@ -334,7 +334,7 @@ public class BlobTest {
       long oid = rs.getLong(2);
 
       InputStream fis = getClass().getResourceAsStream(file);
-      LargeObject blob = lom.open(oid);
+      LargeObject blob = lom.open(oid).get();
       InputStream bis = blob.getInputStream();
 
       int f = fis.read();

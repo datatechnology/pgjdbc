@@ -157,10 +157,9 @@ public abstract class QueryExecutorBase implements QueryExecutor {
                 LOGGER.log(Level.FINEST, " FE=> CancelRequest(pid={0},ckey={1})", new Object[]{cancelPid, cancelKey});
             }
 
-            NetSocket netSocket = VertxHelper.
+            NetSocket netSocket = await(VertxHelper.
                     <NetSocket>vertxTCompletableFuture(
-                            h -> pgStream.getNetClient().connect(pgStream.getHostSpec().getPort(), pgStream.getHostSpec().getHost(), h))
-                    .get();
+                            h -> pgStream.getNetClient().connect(pgStream.getHostSpec().getPort(), pgStream.getHostSpec().getHost(), h)));
             cancelStream =
                     new PGStream(pgStream.getNetClient(), netSocket, pgStream.getHostSpec(), cancelSignalTimeout);
 
@@ -174,7 +173,7 @@ public abstract class QueryExecutorBase implements QueryExecutor {
             cancelStream.sendInteger4(cancelKey);
             cancelStream.flush();
             await(cancelStream.receiveEOF());
-        } catch (IOException | InterruptedException | ExecutionException e) {
+        } catch (IOException e) {
             // Safe to ignore.
             LOGGER.log(Level.FINEST, "Ignoring exception on cancel request:", e);
         } finally {
