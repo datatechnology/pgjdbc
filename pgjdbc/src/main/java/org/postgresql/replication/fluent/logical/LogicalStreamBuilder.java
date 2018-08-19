@@ -11,6 +11,8 @@ import org.postgresql.replication.fluent.AbstractStreamBuilder;
 
 import java.sql.SQLException;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
+
 
 public class LogicalStreamBuilder extends AbstractStreamBuilder<ChainedLogicalStreamBuilder>
     implements ChainedLogicalStreamBuilder, LogicalReplicationOptions {
@@ -33,7 +35,7 @@ public class LogicalStreamBuilder extends AbstractStreamBuilder<ChainedLogicalSt
   }
 
   @Override
-  public PGReplicationStream start() throws SQLException {
+  public CompletableFuture<PGReplicationStream> start() throws SQLException {
     return startCallback.start(this);
   }
 

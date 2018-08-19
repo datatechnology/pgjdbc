@@ -33,6 +33,7 @@ import java.sql.Statement;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.concurrent.ExecutionException;
 
 @RunWith(Parameterized.class)
 public class ArrayTest extends BaseTest4 {
@@ -177,8 +178,7 @@ public class ArrayTest extends BaseTest4 {
     PreparedStatement pstmt = conn.prepareStatement("INSERT INTO arrtest VALUES (?,?,?)");
 
     final PGConnection arraySupport = conn.unwrap(PGConnection.class);
-
-    pstmt.setArray(1, arraySupport.createArrayOf("int4", null));
+	pstmt.setArray(1, arraySupport.createArrayOf("int4", null));
     pstmt.setObject(2, conn.createArrayOf("float8", null));
     pstmt.setObject(3, arraySupport.createArrayOf("varchar", null));
 

@@ -163,7 +163,7 @@ public class LargeObjectManager {
 	 * @deprecated As of 8.3, replaced by {@link #open(long)}
 	 */
 	@Deprecated
-	public LargeObject open(int oid) throws SQLException, InterruptedException, ExecutionException {
+	public CompletableFuture<LargeObject> open(int oid) throws SQLException, InterruptedException, ExecutionException {
 		return open((long) oid, false);
 	}
 
@@ -183,7 +183,7 @@ public class LargeObjectManager {
 	 * @throws InterruptedException 
 	 */
 
-	public LargeObject open(int oid, boolean commitOnClose) throws SQLException, InterruptedException, ExecutionException {
+	public CompletableFuture<LargeObject> open(int oid, boolean commitOnClose) throws SQLException, InterruptedException, ExecutionException {
 		return open((long) oid, commitOnClose);
 	}
 
@@ -199,7 +199,7 @@ public class LargeObjectManager {
 	 * @throws ExecutionException 
 	 * @throws InterruptedException 
 	 */
-	public LargeObject open(long oid) throws SQLException, InterruptedException, ExecutionException {
+	public CompletableFuture<LargeObject> open(long oid) throws SQLException, InterruptedException, ExecutionException {
 		return open(oid, READWRITE, false);
 	}
 
@@ -218,7 +218,7 @@ public class LargeObjectManager {
 	 * @throws InterruptedException 
 	 */
 
-	public LargeObject open(long oid, boolean commitOnClose) throws SQLException, InterruptedException, ExecutionException {
+	public CompletableFuture<LargeObject> open(long oid, boolean commitOnClose) throws SQLException, InterruptedException, ExecutionException {
 		return open(oid, READWRITE, commitOnClose);
 	}
 
@@ -237,7 +237,7 @@ public class LargeObjectManager {
 	 * @deprecated As of 8.3, replaced by {@link #open(long, int)}
 	 */
 	@Deprecated
-	public LargeObject open(int oid, int mode) throws SQLException, InterruptedException, ExecutionException {
+	public CompletableFuture<LargeObject> open(int oid, int mode) throws SQLException, InterruptedException, ExecutionException {
 		return open((long) oid, mode, false);
 	}
 
@@ -258,7 +258,7 @@ public class LargeObjectManager {
 	 * @throws InterruptedException 
 	 */
 
-	public LargeObject open(int oid, int mode, boolean commitOnClose) throws SQLException, InterruptedException, ExecutionException {
+	public CompletableFuture<LargeObject> open(int oid, int mode, boolean commitOnClose) throws SQLException, InterruptedException, ExecutionException {
 		return open((long) oid, mode, commitOnClose);
 	}
 
@@ -275,7 +275,7 @@ public class LargeObjectManager {
 	 * @throws ExecutionException 
 	 * @throws InterruptedException 
 	 */
-	public LargeObject open(long oid, int mode) throws SQLException, InterruptedException, ExecutionException {
+	public CompletableFuture<LargeObject> open(long oid, int mode) throws SQLException, InterruptedException, ExecutionException {
 		return open(oid, mode, false);
 	}
 
@@ -294,13 +294,13 @@ public class LargeObjectManager {
 	 * @throws ExecutionException
 	 * @throws InterruptedException
 	 */
-	public LargeObject open(long oid, int mode, boolean commitOnClose)
+	public CompletableFuture<LargeObject> open(long oid, int mode, boolean commitOnClose)
 			throws SQLException, InterruptedException, ExecutionException {
 		if (conn.getAutoCommit()) {
 			throw new PSQLException(GT.tr("Large Objects may not be used in auto-commit mode."),
 					PSQLState.NO_ACTIVE_SQL_TRANSACTION);
 		}
-		return new LargeObject(fp, oid, mode, conn, commitOnClose);
+		return LargeObject.getLargeObjectInstance(fp, oid, mode, conn, commitOnClose);
 	}
 
 	/**
@@ -376,10 +376,11 @@ public class LargeObjectManager {
 	 * @throws SQLException
 	 *             on error
 	 */
-	public void delete(long oid) throws SQLException {
+	public CompletableFuture<Void> delete(long oid) throws SQLException {
 		FastpathArg[] args = new FastpathArg[1];
 		args[0] = Fastpath.createOIDArg(oid);
-		fp.fastpath("lo_unlink", args);
+		await(fp.fastpath("lo_unlink", args));
+		return CompletableFuture.completedFuture(null);
 	}
 
 	/**
@@ -396,8 +397,8 @@ public class LargeObjectManager {
 	 * @deprecated As of 8.3, replaced by {@link #unlink(long)}
 	 */
 	@Deprecated
-	public void unlink(int oid) throws SQLException {
-		delete((long) oid);
+	public CompletableFuture<Void> unlink(int oid) throws SQLException {
+		return delete((long) oid);
 	}
 
 	/**
@@ -412,8 +413,8 @@ public class LargeObjectManager {
 	 * @throws SQLException
 	 *             on error
 	 */
-	public void unlink(long oid) throws SQLException {
-		delete(oid);
+	public CompletableFuture<Void> unlink(long oid) throws SQLException {
+		return delete(oid);
 	}
 
 	/**
@@ -426,7 +427,7 @@ public class LargeObjectManager {
 	 * @deprecated As of 8.3, replaced by {@link #delete(long)}
 	 */
 	@Deprecated
-	public void delete(int oid) throws SQLException {
-		delete((long) oid);
+	public CompletableFuture<Void> delete(int oid) throws SQLException {
+		return delete((long) oid);
 	}
 }

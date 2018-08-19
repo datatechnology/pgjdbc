@@ -8,6 +8,7 @@ package org.postgresql.largeobject;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.sql.SQLException;
+import java.util.concurrent.ExecutionException;
 
 /**
  * This implements a basic output stream that writes to a LargeObject
@@ -59,7 +60,11 @@ public class BlobOutputStream extends OutputStream {
     checkClosed();
     try {
       if (bpos >= bsize) {
-        lo.write(buf);
+        try {
+			lo.write(buf).get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new IOException(e);
+		}
         bpos = 0;
       }
       buf[bpos++] = (byte) b;
@@ -77,9 +82,17 @@ public class BlobOutputStream extends OutputStream {
       }
 
       if (off == 0 && len == buf.length) {
-        lo.write(buf); // save a buffer creation and copy since full buffer written
+        try {
+			lo.write(buf).get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new IOException(e);
+		} // save a buffer creation and copy since full buffer written
       } else {
-        lo.write(buf, off, len);
+        try {
+			lo.write(buf, off, len).get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new IOException(e);
+		}
       }
     } catch (SQLException se) {
       throw new IOException(se.toString());
@@ -99,7 +112,11 @@ public class BlobOutputStream extends OutputStream {
     checkClosed();
     try {
       if (bpos > 0) {
-        lo.write(buf, 0, bpos);
+        try {
+			lo.write(buf, 0, bpos).get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new IOException(e);
+		}
       }
       bpos = 0;
     } catch (SQLException se) {

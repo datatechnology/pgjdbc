@@ -11,9 +11,7 @@ import org.postgresql.util.PSQLException;
 import org.postgresql.util.PSQLState;
 
 import java.sql.SQLException;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import static com.ea.async.Async.await;
 
 public class PgBlob extends AbstractBlobClob implements java.sql.Blob {
 
@@ -25,7 +23,7 @@ public class PgBlob extends AbstractBlobClob implements java.sql.Blob {
       throws SQLException {
     checkFreed();
 	try {
-		LargeObject subLO = getLo(false).get().copy();
+		LargeObject subLO = getLo(false).get().copy().get();
 		addSubLO(subLO);
 	    if (pos > Integer.MAX_VALUE) {
 	      subLO.seek64(pos - 1, LargeObject.SEEK_SET).get();
@@ -50,12 +48,12 @@ public class PgBlob extends AbstractBlobClob implements java.sql.Blob {
       throws SQLException {
     assertPosition(pos);
     try {
-		getLo(true).get().seek((int) (pos - 1));
+		getLo(true).get().seek((int) (pos - 1)).get();
 	} catch (InterruptedException | ExecutionException e) {
 		throw new SQLException(e);
 	}
     try {
-		getLo(true).get().write(bytes, offset, len);
+		getLo(true).get().write(bytes, offset, len).get();
 	} catch (InterruptedException | ExecutionException e) {
 		throw new SQLException(e);
 	}

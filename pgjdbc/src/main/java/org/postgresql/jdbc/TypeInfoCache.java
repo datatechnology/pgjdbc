@@ -24,6 +24,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+
 import static com.ea.async.Async.await;
 
 public class TypeInfoCache implements TypeInfo {
@@ -173,11 +175,11 @@ public class TypeInfoCache implements TypeInfo {
 		return _pgNameToSQLType.keySet().iterator();
 	}
 
-	public int getSQLType(int oid) throws SQLException {
+	public Integer getSQLType(int oid) throws SQLException {
 		return getSQLType(getPGType(oid));
 	}
 
-	public synchronized int getSQLType(String pgTypeName) throws SQLException {
+	public synchronized Integer getSQLType(String pgTypeName) throws SQLException {
 		if (pgTypeName.endsWith("[]")) {
 			return Types.ARRAY;
 		}
@@ -214,7 +216,7 @@ public class TypeInfoCache implements TypeInfo {
 		_getTypeInfoStatement.setString(1, pgTypeName);
 
 		// Go through BaseStatement to avoid transaction start.
-		if (!await(((BaseStatement) _getTypeInfoStatement).executeWithFlags(QueryExecutor.QUERY_SUPPRESS_BEGIN))) {
+		if (!((BaseStatement)_getTypeInfoStatement).executeWithFlags(QueryExecutor.QUERY_SUPPRESS_BEGIN)) {
 			throw new PSQLException(GT.tr("No results were returned by the query."), PSQLState.NO_DATA);
 		}
 
@@ -343,7 +345,7 @@ public class TypeInfoCache implements TypeInfo {
 		return oidStatementComplex;
 	}
 
-	public synchronized int getPGType(String pgTypeName) throws SQLException {
+	public synchronized Integer getPGType(String pgTypeName) throws SQLException {
 		Integer oid = _pgNameToOid.get(pgTypeName);
 		if (oid != null) {
 			return oid;
@@ -352,7 +354,7 @@ public class TypeInfoCache implements TypeInfo {
 		PreparedStatement oidStatement = getOidStatement(pgTypeName);
 
 		// Go through BaseStatement to avoid transaction start.
-		if (!await(((BaseStatement) oidStatement).executeWithFlags(QueryExecutor.QUERY_SUPPRESS_BEGIN))) {
+		if (!((BaseStatement) oidStatement).executeWithFlags(QueryExecutor.QUERY_SUPPRESS_BEGIN)) {
 			throw new PSQLException(GT.tr("No results were returned by the query."), PSQLState.NO_DATA);
 		}
 
@@ -391,7 +393,7 @@ public class TypeInfoCache implements TypeInfo {
 		_getNameStatement.setInt(1, oid);
 
 		// Go through BaseStatement to avoid transaction start.
-		if (!await(((BaseStatement) _getNameStatement).executeWithFlags(QueryExecutor.QUERY_SUPPRESS_BEGIN))) {
+		if (!((BaseStatement) _getNameStatement).executeWithFlags(QueryExecutor.QUERY_SUPPRESS_BEGIN)) {
 			throw new PSQLException(GT.tr("No results were returned by the query."), PSQLState.NO_DATA);
 		}
 
@@ -421,7 +423,7 @@ public class TypeInfoCache implements TypeInfo {
 		return pgTypeName;
 	}
 
-	public int getPGArrayType(String elementTypeName) throws SQLException {
+	public Integer getPGArrayType(String elementTypeName) throws SQLException {
 		elementTypeName = getTypeForAlias(elementTypeName);
 		return getPGType(elementTypeName + "[]");
 	}
@@ -445,7 +447,7 @@ public class TypeInfoCache implements TypeInfo {
 		return i;
 	}
 
-	public synchronized char getArrayDelimiter(int oid) throws SQLException {
+	public synchronized Character getArrayDelimiter(int oid) throws SQLException {
 		if (oid == Oid.UNSPECIFIED) {
 			return ',';
 		}
@@ -465,7 +467,7 @@ public class TypeInfoCache implements TypeInfo {
 		_getArrayDelimiterStatement.setInt(1, oid);
 
 		// Go through BaseStatement to avoid transaction start.
-		if (!await(((BaseStatement) _getArrayDelimiterStatement).executeWithFlags(QueryExecutor.QUERY_SUPPRESS_BEGIN))) {
+		if (!((BaseStatement) _getArrayDelimiterStatement).executeWithFlags(QueryExecutor.QUERY_SUPPRESS_BEGIN)) {
 			throw new PSQLException(GT.tr("No results were returned by the query."), PSQLState.NO_DATA);
 		}
 
@@ -484,7 +486,7 @@ public class TypeInfoCache implements TypeInfo {
 		return delim;
 	}
 
-	public synchronized int getPGArrayElement(int oid) throws SQLException {
+	public synchronized Integer getPGArrayElement(int oid) throws SQLException {
 		if (oid == Oid.UNSPECIFIED) {
 			return Oid.UNSPECIFIED;
 		}
@@ -506,7 +508,7 @@ public class TypeInfoCache implements TypeInfo {
 		_getArrayElementOidStatement.setInt(1, oid);
 
 		// Go through BaseStatement to avoid transaction start.
-		if (!await(((BaseStatement) _getArrayElementOidStatement).executeWithFlags(QueryExecutor.QUERY_SUPPRESS_BEGIN))) {
+		if (!((BaseStatement) _getArrayElementOidStatement).executeWithFlags(QueryExecutor.QUERY_SUPPRESS_BEGIN)) {
 			throw new PSQLException(GT.tr("No results were returned by the query."), PSQLState.NO_DATA);
 		}
 

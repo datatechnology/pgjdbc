@@ -22,10 +22,11 @@ import java.util.concurrent.CompletableFuture;
 public interface BaseConnection extends PGConnection, Connection {
   /**
    * Cancel the current query executing on this connection.
+ * @return 
    *
    * @throws SQLException if something goes wrong.
    */
-  void cancelQuery() throws SQLException;
+  CompletableFuture<Void> cancelQuery() throws SQLException;
 
   /**
    * Execute a SQL query that returns a single resultset. Never causes a new transaction to be

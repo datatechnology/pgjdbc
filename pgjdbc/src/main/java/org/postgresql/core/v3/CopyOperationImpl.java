@@ -11,6 +11,7 @@ import org.postgresql.util.PSQLException;
 import org.postgresql.util.PSQLState;
 
 import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
 
 public abstract class CopyOperationImpl implements CopyOperation {
   QueryExecutorImpl queryExecutor;
@@ -24,8 +25,8 @@ public abstract class CopyOperationImpl implements CopyOperation {
     fieldFormats = fmts;
   }
 
-  public void cancelCopy() throws SQLException {
-    queryExecutor.cancelCopy(this);
+  public CompletableFuture<Void> cancelCopy() throws SQLException {
+    return queryExecutor.cancelCopy(this);
   }
 
   public int getFieldCount() {

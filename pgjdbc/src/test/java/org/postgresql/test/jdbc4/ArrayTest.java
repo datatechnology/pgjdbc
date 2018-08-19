@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 
 @RunWith(Parameterized.class)
 public class ArrayTest extends BaseTest4 {
@@ -79,7 +80,7 @@ public class ArrayTest extends BaseTest4 {
   @Test
   public void testCreateArrayOfBool() throws SQLException {
     PreparedStatement pstmt = _conn.prepareStatement("SELECT ?::bool[]");
-    pstmt.setArray(1, _conn.unwrap(PgConnection.class).createArrayOf("boolean", new boolean[] { true, true, false }));
+	pstmt.setArray(1, _conn.unwrap(PgConnection.class).createArrayOf("boolean", new boolean[] { true, true, false }));
 
     ResultSet rs = pstmt.executeQuery();
     Assert.assertTrue(rs.next());

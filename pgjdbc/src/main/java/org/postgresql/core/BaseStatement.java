@@ -72,5 +72,5 @@ public interface BaseStatement extends PGStatement, Statement {
    * @return true if there is a result set
    * @throws SQLException if something goes wrong.
    */
-  CompletableFuture<Boolean> executeWithFlags(int flags) throws SQLException;
+  boolean executeWithFlags(int flags) throws SQLException;
 }

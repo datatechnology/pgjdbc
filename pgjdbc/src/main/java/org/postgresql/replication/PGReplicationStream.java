@@ -10,6 +10,7 @@ import org.postgresql.replication.fluent.logical.LogicalReplicationOptions;
 
 import java.nio.ByteBuffer;
 import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Not tread safe replication stream. After complete streaming should be close, for free resource on
@@ -36,7 +37,7 @@ public interface PGReplicationStream
    * received byte array with use offset, so, use {@link ByteBuffer#array()} carefully
    * @throws SQLException when some internal exception occurs during read from stream
    */
-  ByteBuffer read() throws SQLException;
+  CompletableFuture<ByteBuffer> read() throws SQLException;
 
   /**
    * <p>Read next wal record from backend. It method can't be block and in contrast to {@link
@@ -54,7 +55,7 @@ public interface PGReplicationStream
    * ByteBuffer#array()} carefully.
    * @throws SQLException when some internal exception occurs during read from stream
    */
-  ByteBuffer readPending() throws SQLException;
+  CompletableFuture<ByteBuffer> readPending() throws SQLException;
 
   /**
    * Parameter updates by execute {@link PGReplicationStream#read()} method.
@@ -102,11 +103,12 @@ public interface PGReplicationStream
    * Force send to backend status about last received, flushed and applied LSN. You can not use it
    * method explicit, because {@link PGReplicationStream} send status to backend periodical by
    * configured interval via {@link LogicalReplicationOptions#getStatusInterval}
+ * @return 
    *
    * @see LogicalReplicationOptions#getStatusInterval()
    * @throws SQLException when some internal exception occurs during read from stream
    */
-  void forceUpdateStatus() throws SQLException;
+  CompletableFuture<Void> forceUpdateStatus() throws SQLException;
 
   /**
    * @return {@code true} if replication stream was already close, otherwise return {@code false}
@@ -123,6 +125,7 @@ public interface PGReplicationStream
    * close replication connection instead of close replication stream. For more information about it
    * problem see mailing list thread <a href="http://www.postgresql.org/message-id/CAFgjRd3hdYOa33m69TbeOfNNer2BZbwa8FFjt2V5VFzTBvUU3w@mail.gmail.com">
    * Stopping logical replication protocol</a>
+ * @return 
    *
    * @throws SQLException when some internal exception occurs during end streaming
    */

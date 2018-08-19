@@ -13,6 +13,7 @@ import java.io.OutputStream;
 import java.sql.SQLException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import static com.ea.async.Async.await;
 
 /**
  * OutputStream for buffered input into a PostgreSQL COPY FROM STDIN operation
@@ -87,7 +88,13 @@ public class PGCopyOutputStream extends OutputStream implements CopyIn {
   public void write(byte[] buf, int off, int siz) throws IOException {
     checkClosed();
     try {
-      writeToCopy(buf, off, siz);
+      try {
+		writeToCopy(buf, off, siz).get();
+	} catch (InterruptedException | ExecutionException e) {
+		IOException ioe = new IOException("Vertx Write to copy failed.");
+	      ioe.initCause(e);
+	      throw ioe;
+	}
     } catch (SQLException se) {
       IOException ioe = new IOException("Write to copy failed.");
       ioe.initCause(se);
@@ -108,7 +115,11 @@ public class PGCopyOutputStream extends OutputStream implements CopyIn {
     }
 
     try {
-      endCopy();
+      try {
+		endCopy().get();
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	}
     } catch (SQLException se) {
       IOException ioe = new IOException("Ending write to copy failed.");
       ioe.initCause(se);
@@ -121,7 +132,11 @@ public class PGCopyOutputStream extends OutputStream implements CopyIn {
     try {
       op.writeToCopy(copyBuffer, 0, at);
       at = 0;
-      op.flushCopy();
+      try {
+		op.flushCopy().get();
+	} catch (InterruptedException | ExecutionException e) {
+		throw new IOException(e);
+	}
     } catch (SQLException e) {
       IOException ioe = new IOException("Unable to flush stream");
       ioe.initCause(e);
@@ -129,18 +144,19 @@ public class PGCopyOutputStream extends OutputStream implements CopyIn {
     }
   }
 
-  public void writeToCopy(byte[] buf, int off, int siz) throws SQLException {
+  public CompletableFuture<Void> writeToCopy(byte[] buf, int off, int siz) throws SQLException {
     if (at > 0
         && siz > copyBuffer.length - at) { // would not fit into rest of our buf, so flush buf
-      op.writeToCopy(copyBuffer, 0, at);
+      await(op.writeToCopy(copyBuffer, 0, at));
       at = 0;
     }
     if (siz > copyBuffer.length) { // would still not fit into buf, so just pass it through
-      op.writeToCopy(buf, off, siz);
+      await(op.writeToCopy(buf, off, siz));
     } else { // fits into our buf, so save it there
       System.arraycopy(buf, off, copyBuffer, at, siz);
       at += siz;
     }
+	return CompletableFuture.completedFuture(null);
   }
 
   public int getFormat() {
@@ -151,8 +167,8 @@ public class PGCopyOutputStream extends OutputStream implements CopyIn {
     return op.getFieldFormat(field);
   }
 
-  public void cancelCopy() throws SQLException {
-    op.cancelCopy();
+  public CompletableFuture<Void> cancelCopy() throws SQLException {
+    return op.cancelCopy();
   }
 
   public int getFieldCount() {
@@ -163,15 +179,15 @@ public class PGCopyOutputStream extends OutputStream implements CopyIn {
     return op.isActive();
   }
 
-  public void flushCopy() throws SQLException {
-    op.flushCopy();
+  public CompletableFuture<Void> flushCopy() throws SQLException {
+    return op.flushCopy();
   }
 
   public CompletableFuture<Long> endCopy() throws SQLException {
     if (at > 0) {
-      op.writeToCopy(copyBuffer, 0, at);
+      await(op.writeToCopy(copyBuffer, 0, at));
     }
-    op.endCopy();
+    await(op.endCopy());
     return CompletableFuture.completedFuture(getHandledRowCount());
   }
 

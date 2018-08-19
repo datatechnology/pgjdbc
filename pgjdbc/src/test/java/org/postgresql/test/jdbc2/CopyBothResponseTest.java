@@ -33,6 +33,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -87,7 +88,7 @@ public class CopyBothResponseTest {
           copyDual, CoreMatchers.notNullValue()
       );
     } finally {
-      copyDual.endCopy();
+      copyDual.endCopy().get();
     }
   }
 
@@ -100,10 +101,10 @@ public class CopyBothResponseTest {
         "START_REPLICATION " + logSequenceNumber.asString()).get();
 
     sendStandByUpdate(copyDual, logSequenceNumber, logSequenceNumber, logSequenceNumber, true);
-    ByteBuffer buf = ByteBuffer.wrap(copyDual.readFromCopy());
+    ByteBuffer buf = ByteBuffer.wrap(copyDual.readFromCopy().get());
 
     int code = buf.get();
-    copyDual.endCopy();
+    copyDual.endCopy().get();
 
     assertThat(
         "Streaming replication start with swap keep alive message, we want that first get packege will be keep alive",
@@ -120,11 +121,11 @@ public class CopyBothResponseTest {
         cm.copyDual("START_REPLICATION " + startLsn.asString()).get();
     sendStandByUpdate(copyDual, startLsn, startLsn, startLsn, true);
 
-    ByteBuffer buf = ByteBuffer.wrap(copyDual.readFromCopy());
+    ByteBuffer buf = ByteBuffer.wrap(copyDual.readFromCopy().get());
 
     int code = buf.get();
     LogSequenceNumber lastLSN = LogSequenceNumber.valueOf(buf.getLong());
-    copyDual.endCopy();
+    copyDual.endCopy().get();
 
     assertThat(
         "Keep alive message contain last lsn on server, we want that before start replication "
@@ -147,10 +148,10 @@ public class CopyBothResponseTest {
         cm.copyDual("START_REPLICATION " + startLsn.asString()).get();
     sendStandByUpdate(copyDual, startLsn, startLsn, startLsn, false);
 
-    ByteBuffer buf = ByteBuffer.wrap(copyDual.readFromCopy());
+    ByteBuffer buf = ByteBuffer.wrap(copyDual.readFromCopy().get());
 
     char code = (char) buf.get();
-    copyDual.endCopy();
+    copyDual.endCopy().get();
 
     assertThat(
         "When replication starts via slot and specify LSN that lower than last LSN on server, "
@@ -172,8 +173,16 @@ public class CopyBothResponseTest {
     response.put(replyRequired ? (byte) 1 : (byte) 0); //reply soon as possible
 
     byte[] standbyUpdate = response.array();
-    copyDual.writeToCopy(standbyUpdate, 0, standbyUpdate.length);
-    copyDual.flushCopy();
+    try {
+		copyDual.writeToCopy(standbyUpdate, 0, standbyUpdate.length).get();
+	} catch (InterruptedException | ExecutionException e1) {
+		throw new SQLException(e1);
+	}
+    try {
+		copyDual.flushCopy().get();
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	}
   }
 
   private LogSequenceNumber getCurrentLSN() throws SQLException {

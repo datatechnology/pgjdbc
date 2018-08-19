@@ -35,6 +35,7 @@ import java.util.Enumeration;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.logging.Formatter;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -256,7 +257,7 @@ public class Driver implements java.sql.Driver {
       // more details.
       long timeout = timeout(props);
       if (timeout <= 0) {
-        return makeConnection(url, props).get();
+        return makeConnection(url, props);
       }
 
       ConnectThread ct = new ConnectThread(url, props);
@@ -364,7 +365,7 @@ public class Driver implements java.sql.Driver {
       Throwable error;
 
       try {
-        conn = makeConnection(url, props).get();
+        conn = makeConnection(url, props);
         error = null;
       } catch (Throwable t) {
         conn = null;
@@ -453,9 +454,14 @@ public class Driver implements java.sql.Driver {
    * @return a new connection
    * @throws SQLException if the connection could not be made
    */
-  private static CompletableFuture<Connection> makeConnection(String url, Properties props) throws SQLException {
-    QueryExecutor queryExecutor = await(ConnectionFactory.openConnection(hostSpecs(props), user(props), database(props), props));
-    return CompletableFuture.completedFuture(new PgConnection(queryExecutor, props, url));
+  private static Connection makeConnection(String url, Properties props) throws SQLException {
+    QueryExecutor queryExecutor;
+	try {
+		queryExecutor = ConnectionFactory.openConnection(hostSpecs(props), user(props), database(props), props).get();
+	} catch (InterruptedException | ExecutionException e) {
+		throw new SQLException(e);
+	}
+    return new PgConnection(queryExecutor, props, url);
   }
 
   /**

@@ -32,12 +32,12 @@ import java.util.concurrent.CompletableFuture;
  */
 public class CopyInImpl extends CopyOperationImpl implements CopyIn {
 
-  public void writeToCopy(byte[] data, int off, int siz) throws SQLException {
-    queryExecutor.writeToCopy(this, data, off, siz);
+  public CompletableFuture<Void> writeToCopy(byte[] data, int off, int siz) throws SQLException {
+    return queryExecutor.writeToCopy(this, data, off, siz);
   }
 
-  public void flushCopy() throws SQLException {
-    queryExecutor.flushCopy(this);
+  public CompletableFuture<Void> flushCopy() throws SQLException {
+    return queryExecutor.flushCopy(this);
   }
 
   public CompletableFuture<Long> endCopy() throws SQLException {
