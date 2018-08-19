@@ -347,7 +347,7 @@ public class PGStream implements Closeable, Flushable {
 					await(receive(answer[i], 0, l_size));
 				} catch (OutOfMemoryError oome) {
 					oom = oome;
-					skip(l_size);
+					await(skip(l_size));
 				}
 			}
 		}
@@ -396,9 +396,10 @@ public class PGStream implements Closeable, Flushable {
 		return CompletableFuture.completedFuture(null);
 	}
 
-	public void skip(int size) throws IOException {
+	public CompletableFuture<Void> skip(int size) throws IOException {
 		try {
-			this.stream.skip(size).wait();
+			//this.stream.skip(size).wait();
+			return this.stream.skip(size);
 		} catch (Throwable err) {
 			throw new IOException(err.getMessage(), err);
 		}

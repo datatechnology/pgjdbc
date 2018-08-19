@@ -22,10 +22,11 @@ import java.util.concurrent.CompletableFuture;
 public interface BaseConnection extends PGConnection, Connection {
   /**
    * Cancel the current query executing on this connection.
+ * @return 
    *
    * @throws SQLException if something goes wrong.
    */
-  void cancelQuery() throws SQLException;
+  CompletableFuture<Void> cancelQuery() throws SQLException;
 
   /**
    * Execute a SQL query that returns a single resultset. Never causes a new transaction to be
@@ -35,9 +36,9 @@ public interface BaseConnection extends PGConnection, Connection {
    * @return the (non-null) returned resultset
    * @throws SQLException if something goes wrong.
    */
-  ResultSet execSQLQuery(String s) throws SQLException;
+  CompletableFuture<ResultSet> execSQLQuery(String s) throws SQLException;
 
-  ResultSet execSQLQuery(String s, int resultSetType, int resultSetConcurrency)
+  CompletableFuture<ResultSet> execSQLQuery(String s, int resultSetType, int resultSetConcurrency)
       throws SQLException;
 
   /**
@@ -48,7 +49,7 @@ public interface BaseConnection extends PGConnection, Connection {
  * @return 
    * @throws SQLException if something goes wrong.
    */
-  void execSQLUpdate(String s) throws SQLException;
+  CompletableFuture<Void> execSQLUpdate(String s) throws SQLException;
 
   /**
    * Get the QueryExecutor implementation for this connection.

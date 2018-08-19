@@ -122,7 +122,7 @@ public class Fastpath {
    *             {@link #getLong(String, FastpathArg[])} if you expect a numeric one
    */
   @Deprecated
-  public Object fastpath(String name, boolean resulttype, FastpathArg[] args) throws SQLException {
+  public CompletableFuture<Object> fastpath(String name, boolean resulttype, FastpathArg[] args) throws SQLException {
     connection.getLogger().log(Level.FINEST, "Fastpath: calling {0}", name);
     return fastpath(getID(name), resulttype, args);
   }

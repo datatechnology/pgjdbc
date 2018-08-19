@@ -138,7 +138,7 @@ public abstract class AbstractBlobClob {
 	public synchronized InputStream getBinaryStream() throws SQLException {
 		checkFreed();
 		try {
-			LargeObject subLO = getLo(false).get().copy();
+			LargeObject subLO = getLo(false).get().copy().get();
 			addSubLO(subLO);
 			subLO.seek(0, LargeObject.SEEK_SET).get();
 			return subLO.getInputStream();
@@ -150,7 +150,7 @@ public abstract class AbstractBlobClob {
 	public synchronized OutputStream setBinaryStream(long pos) throws SQLException {
 		assertPosition(pos);
 		try {
-			LargeObject subLO = getLo(true).get().copy();
+			LargeObject subLO = getLo(true).get().copy().get();
 			addSubLO(subLO);
 			subLO.seek((int) (pos - 1)).get();
 			return subLO.getOutputStream();
@@ -179,7 +179,7 @@ public abstract class AbstractBlobClob {
 		int tmpPosition = 1;
 
 		try {
-			for (LOIterator i = new LOIterator(start - 1); i.hasNext().get(); position++) {
+			for (LOIterator i = getLOIteratorInstance(start - 1).get(); i.hasNext().get(); position++) {
 				byte b = i.next();
 				if (b == pattern[patternIdx]) {
 					if (patternIdx == 0) {
@@ -211,12 +211,8 @@ public abstract class AbstractBlobClob {
 		private int idx = BUFFER_SIZE;
 		private int numBytes = BUFFER_SIZE;
 
-		LOIterator(long start) throws SQLException {
-			try {
-				getLo(false).get().seek((int) start).get();
-			} catch (InterruptedException | ExecutionException e) {
-				throw new SQLException(e);
-			}
+		protected LOIterator() throws SQLException {
+			
 		}
 
 		public CompletableFuture<Boolean> hasNext() throws SQLException {
@@ -224,11 +220,7 @@ public abstract class AbstractBlobClob {
 			if (idx < numBytes) {
 				result = true;
 			} else {
-				try {
-					numBytes = await(getLo(false).get().read(buffer, 0, BUFFER_SIZE));
-				} catch (InterruptedException | ExecutionException e) {
-					throw new SQLException(e);
-				}
+				numBytes = await(await(getLo(false)).read(buffer, 0, BUFFER_SIZE));
 				idx = 0;
 				result = (numBytes > 0);
 			}
@@ -239,6 +231,8 @@ public abstract class AbstractBlobClob {
 			return buffer[idx++];
 		}
 	}
+	
+	
 
 	/**
 	 * This is simply passing the byte value of the pattern Blob
@@ -311,7 +305,7 @@ public abstract class AbstractBlobClob {
 
 				LargeObjectManager lom = conn.getLargeObjectAPI();
 				try {
-					LargeObject newLo = lom.open(oid, LargeObjectManager.READWRITE);
+					LargeObject newLo = await(lom.open(oid, LargeObjectManager.READWRITE));
 					this.subLOs.add(this.currentLo);
 					this.currentLo = newLo;
 
@@ -327,7 +321,7 @@ public abstract class AbstractBlobClob {
 		}
 		LargeObjectManager lom = conn.getLargeObjectAPI();
 		try {
-			currentLo = lom.open(oid, forWrite ? LargeObjectManager.READWRITE : LargeObjectManager.READ);
+			currentLo = await(lom.open(oid, forWrite ? LargeObjectManager.READWRITE : LargeObjectManager.READ));
 		} catch (InterruptedException | ExecutionException e) {
 			throw new SQLException(e);
 		}
@@ -337,5 +331,11 @@ public abstract class AbstractBlobClob {
 
 	protected void addSubLO(LargeObject subLO) {
 		subLOs.add(subLO);
+	}
+	
+	public CompletableFuture<LOIterator> getLOIteratorInstance(long start) throws SQLException{
+		LOIterator loIterator = new LOIterator();
+		 await(getLo(false)).seek((int)start);
+		 return CompletableFuture.completedFuture(loIterator);
 	}
 }

@@ -404,13 +404,13 @@ public class PgConnection implements BaseConnection {
 
 	}
 
-	public ResultSet execSQLQuery(String s) throws SQLException {
+	public CompletableFuture<ResultSet> execSQLQuery(String s) throws SQLException {
 		return execSQLQuery(s, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
 	}
 
-	public ResultSet execSQLQuery(String s, int resultSetType, int resultSetConcurrency) throws SQLException {
+	public CompletableFuture<ResultSet> execSQLQuery(String s, int resultSetType, int resultSetConcurrency) throws SQLException {
 		BaseStatement stat = (BaseStatement) createStatement(resultSetType, resultSetConcurrency);
-		boolean hasResultSet = stat.executeWithFlags(s, QueryExecutor.QUERY_SUPPRESS_BEGIN);
+		boolean hasResultSet = await(stat.executeWithFlags(s, QueryExecutor.QUERY_SUPPRESS_BEGIN));
 
 		while (!hasResultSet && stat.getUpdateCount() != -1) {
 			hasResultSet = stat.getMoreResults();
@@ -427,13 +427,13 @@ public class PgConnection implements BaseConnection {
 			addWarning(warnings);
 		}
 
-		return stat.getResultSet();
+		return CompletableFuture.completedFuture(stat.getResultSet());
 	}
 
-	public void execSQLUpdate(String s) throws SQLException {
+	public CompletableFuture<Void> execSQLUpdate(String s) throws SQLException {
 		BaseStatement stmt = (BaseStatement) createStatement();
-		if (stmt.executeWithFlags(s, QueryExecutor.QUERY_NO_METADATA | QueryExecutor.QUERY_NO_RESULTS
-				| QueryExecutor.QUERY_SUPPRESS_BEGIN)) {
+		if (await(stmt.executeWithFlags(s, QueryExecutor.QUERY_NO_METADATA | QueryExecutor.QUERY_NO_RESULTS
+				| QueryExecutor.QUERY_SUPPRESS_BEGIN))) {
 			// throw new PSQLException(GT.tr("A result was returned when none was
 			// expected."),
 			// PSQLState.TOO_MANY_RESULTS);
@@ -448,6 +448,8 @@ public class PgConnection implements BaseConnection {
 			}
 			stmt.close();
 		}
+		
+		return CompletableFuture.completedFuture(null);
 	}
 
 	/**
@@ -704,7 +706,11 @@ public class PgConnection implements BaseConnection {
 		if (readOnly != this.readOnly) {
 			String readOnlySql = "SET SESSION CHARACTERISTICS AS TRANSACTION "
 					+ (readOnly ? "READ ONLY" : "READ WRITE");
-			execSQLUpdate(readOnlySql); // nb: no BEGIN triggered.
+			try {
+				execSQLUpdate(readOnlySql).get();
+			} catch (InterruptedException | ExecutionException e) {
+				throw new SQLException(e);
+			} // nb: no BEGIN triggered.
 		}
 
 		this.readOnly = readOnly;
@@ -807,7 +813,11 @@ public class PgConnection implements BaseConnection {
 
 		String level = null;
 		ResultSet rs = null;
-		rs = execSQLQuery("SHOW TRANSACTION ISOLATION LEVEL");
+		try {
+			rs = execSQLQuery("SHOW TRANSACTION ISOLATION LEVEL").get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new SQLException(e);
+		}
 		if (rs.next()) {
 			level = rs.getString(1);
 		}
@@ -853,7 +863,11 @@ public class PgConnection implements BaseConnection {
 		}
 
 		String isolationLevelSQL = "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL " + isolationLevelName;
-		execSQLUpdate(isolationLevelSQL); // nb: no BEGIN triggered
+		try {
+			execSQLUpdate(isolationLevelSQL).get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new SQLException(e);
+		} // nb: no BEGIN triggered
 		LOGGER.log(Level.FINE, "  setTransactionIsolation = {0}", isolationLevelName);
 	}
 
@@ -984,9 +998,9 @@ public class PgConnection implements BaseConnection {
 	}
 
 	@Override
-	public void cancelQuery() throws SQLException {
+	public CompletableFuture<Void> cancelQuery() throws SQLException {
 		checkClosed();
-		queryExecutor.sendQueryCancel();
+		return queryExecutor.sendQueryCancel();
 	}
 
 	@Override
@@ -1336,7 +1350,6 @@ public class PgConnection implements BaseConnection {
 		checkClosed();
 
 		int oid = getTypeInfo().getPGArrayType(typeName);
-
 		if (oid == Oid.UNSPECIFIED) {
 			throw new PSQLException(GT.tr("Unable to find server array type for provided name {0}.", typeName),
 					PSQLState.INVALID_NAME);
@@ -1346,7 +1359,7 @@ public class PgConnection implements BaseConnection {
 			return makeArray(oid, null);
 		}
 
-		char delim = getTypeInfo().getArrayDelimiter(oid);
+		char delim= getTypeInfo().getArrayDelimiter(oid);
 		StringBuilder sb = new StringBuilder();
 		appendArray(sb, elements, delim);
 
@@ -1407,7 +1420,11 @@ public class PgConnection implements BaseConnection {
 				StringBuilder sql = new StringBuilder("SET application_name = '");
 				Utils.escapeLiteral(sql, value, getStandardConformingStrings());
 				sql.append("'");
-				execSQLUpdate(sql.toString());
+				try {
+					execSQLUpdate(sql.toString()).get();
+				} catch (InterruptedException | ExecutionException e) {
+					throw new SQLException(e);
+				}
 			} catch (SQLException sqle) {
 				Map<String, ClientInfoStatus> failures = new HashMap<String, ClientInfoStatus>();
 				failures.put(name, ClientInfoStatus.REASON_UNKNOWN);
@@ -1642,7 +1659,11 @@ public class PgConnection implements BaseConnection {
 		checkClosed();
 
 		PSQLSavepoint pgSavepoint = (PSQLSavepoint) savepoint;
-		execSQLUpdate("ROLLBACK TO SAVEPOINT " + pgSavepoint.getPGName());
+		try {
+			execSQLUpdate("ROLLBACK TO SAVEPOINT " + pgSavepoint.getPGName()).get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new SQLException(e);
+		}
 	}
 
 	@Override
@@ -1650,7 +1671,11 @@ public class PgConnection implements BaseConnection {
 		checkClosed();
 
 		PSQLSavepoint pgSavepoint = (PSQLSavepoint) savepoint;
-		execSQLUpdate("RELEASE SAVEPOINT " + pgSavepoint.getPGName());
+		try {
+			execSQLUpdate("RELEASE SAVEPOINT " + pgSavepoint.getPGName()).get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new SQLException(e);
+		}
 		pgSavepoint.invalidate();
 	}
 

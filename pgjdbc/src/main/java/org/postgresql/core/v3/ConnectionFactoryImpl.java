@@ -213,8 +213,10 @@ public class ConnectionFactoryImpl extends ConnectionFactory {
                 int cancelSignalTimeout = PGProperty.CANCEL_SIGNAL_TIMEOUT.getInt(info) * 1000;
 
                 // Do final startup.
-                QueryExecutor queryExecutor = new QueryExecutorImpl(newStream, user, database,
-                        cancelSignalTimeout, info);
+                /*QueryExecutor queryExecutor = new QueryExecutorImpl(newStream, user, database,
+                        cancelSignalTimeout, info);*/
+                QueryExecutor queryExecutor = await(QueryExecutorImpl.getQueryExecutorInstance(newStream, user, database,
+                        cancelSignalTimeout, info));
 
                 // Check Master or Secondary
                 HostStatus hostStatus = HostStatus.ConnectOK;

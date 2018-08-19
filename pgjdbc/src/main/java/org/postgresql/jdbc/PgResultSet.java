@@ -71,6 +71,7 @@ import java.util.Map;
 import java.util.StringTokenizer;
 import java.util.TimeZone;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -247,7 +248,11 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 				// We take the scrollability from the statement, but until
 				// we have updatable cursors it must be readonly.
 				ResultSet rs;
-				rs = connection.execSQLQuery(sb.toString(), resultsettype, ResultSet.CONCUR_READ_ONLY);
+				try {
+					rs = connection.execSQLQuery(sb.toString(), resultsettype, ResultSet.CONCUR_READ_ONLY).get();
+				} catch (InterruptedException | ExecutionException e) {
+					throw new SQLException(e);
+				}
 
 				//
 				// In long running transactions these backend cursors take up memory space
@@ -259,7 +264,11 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 				sb.setLength(0);
 				sb.append("CLOSE ");
 				Utils.escapeIdentifier(sb, cursorName);
-				connection.execSQLUpdate(sb.toString());
+				try {
+					connection.execSQLUpdate(sb.toString()).get();
+				} catch (InterruptedException | ExecutionException e) {
+					throw new SQLException(e);
+				}
 				((PgResultSet) rs).setRefCursor(cursorName);
 				return rs;
 			}
@@ -271,7 +280,7 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 			}
 
 			// Caller determines what to do (JDBC3 overrides in this case)
-			return null;
+			return CompletableFuture.completedFuture(null);
 		}
 	}
 
@@ -2251,6 +2260,7 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 			int sqlType = getSQLType(columnIndex);
 			if (sqlType != Types.NUMERIC && sqlType != Types.DECIMAL) {
 				Object obj = internalGetObject(columnIndex, fields[columnIndex - 1]);
+				
 				if (obj == null) {
 					return null;
 				}
@@ -2489,14 +2499,18 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 		}
 
 		Object result = internalGetObject(columnIndex, field);
+
 		if (result != null) {
 			return result;
 		}
 
 		if (isBinary(columnIndex)) {
+
 			return connection.getObject(getPGType(columnIndex), null, this_row[columnIndex - 1]);
+
 		}
 		return connection.getObject(getPGType(columnIndex), getString(columnIndex), null);
+
 	}
 
 	public Object getObject(String columnName) throws SQLException {
@@ -3357,8 +3371,10 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 			Object object;
 			if (isBinary(columnIndex)) {
 				object = connection.getObject(getPGType(columnIndex), null, this_row[columnIndex - 1]);
+
 			} else {
 				object = connection.getObject(getPGType(columnIndex), getString(columnIndex), null);
+
 			}
 			return type.cast(object);
 		}
