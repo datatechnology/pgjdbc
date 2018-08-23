@@ -280,8 +280,8 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 			}
 
 			// Caller determines what to do (JDBC3 overrides in this case)
-			return CompletableFuture.completedFuture(null);
 		}
+		return null;
 	}
 
 	private void checkScrollable() throws SQLException {
