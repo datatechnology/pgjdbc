@@ -17,6 +17,8 @@ import org.postgresql.core.ResultCursor;
 import org.postgresql.core.ResultHandlerBase;
 import org.postgresql.core.TypeInfo;
 import org.postgresql.core.Utils;
+import org.postgresql.core.VxBaseResultSet;
+import org.postgresql.core.VxBaseStatement;
 import org.postgresql.util.ByteConverter;
 import org.postgresql.util.GT;
 import org.postgresql.util.HStoreConverter;
@@ -42,9 +44,9 @@ import java.sql.Blob;
 import java.sql.Clob;
 import java.sql.Date;
 import java.sql.NClob;
-import java.sql.PreparedStatement;
+//import java.sql.PreparedStatement;
 import java.sql.Ref;
-import java.sql.ResultSet;
+//import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.RowId;
 import java.sql.SQLException;
@@ -77,7 +79,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import static com.ea.async.Async.await;
 
-public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultSet {
+public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorResultSet {
 
 	// needed for updateable result set support
 	private boolean updateable = false;
@@ -88,16 +90,16 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 	private boolean singleTable = false;
 	private String onlyTable = "";
 	private String tableName = null;
-	private PreparedStatement updateStatement = null;
-	private PreparedStatement insertStatement = null;
-	private PreparedStatement deleteStatement = null;
-	private PreparedStatement selectStatement = null;
+	private VxPreparedStatement updateStatement = null;
+	private VxPreparedStatement insertStatement = null;
+	private VxPreparedStatement deleteStatement = null;
+	private VxPreparedStatement selectStatement = null;
 	private final int resultsettype;
 	private final int resultsetconcurrency;
-	private int fetchdirection = ResultSet.FETCH_UNKNOWN;
+	private int fetchdirection = VxBaseResultSet.FETCH_UNKNOWN;
 	private TimeZone defaultTimeZone;
-	protected final BaseConnection connection; // the connection we belong to
-	protected final BaseStatement statement; // the statement we belong to
+	protected final VxConnection connection; // the connection we belong to
+	protected final VxStatement statement; // the statement we belong to
 	protected final Field[] fields; // Field metadata for this resultset.
 	protected final Query originalQuery; // Query we originated from
 
@@ -128,7 +130,7 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 	private ResultSetMetaData rsMetaData;
 
 	protected ResultSetMetaData createMetaData() throws SQLException {
-		return new PgResultSetMetaData(connection, fields);
+		return new PgResultSetMetaData(this.connection.createConnection(), fields);
 	}
 
 	public ResultSetMetaData getMetaData() throws SQLException {
@@ -139,7 +141,7 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 		return rsMetaData;
 	}
 
-	PgResultSet(Query originalQuery, BaseStatement statement, Field[] fields, List<byte[][]> tuples,
+	VxResultSet(Query originalQuery, VxStatement statement, Field[] fields, List<byte[][]> tuples,
 			ResultCursor cursor, int maxRows, int maxFieldSize, int rsType, int rsConcurrency, int rsHoldability)
 			throws SQLException {
 		// Fail-fast on invalid null inputs
@@ -151,7 +153,7 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 		}
 
 		this.originalQuery = originalQuery;
-		this.connection = (BaseConnection) statement.getConnection();
+		this.connection = statement.getConnection();
 		this.statement = statement;
 		this.fields = fields;
 		this.rows = tuples;
@@ -247,9 +249,9 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 				//
 				// We take the scrollability from the statement, but until
 				// we have updatable cursors it must be readonly.
-				ResultSet rs;
+				VxResultSet rs;
 				try {
-					rs = connection.execSQLQuery(sb.toString(), resultsettype, ResultSet.CONCUR_READ_ONLY).get();
+					rs = (VxResultSet) connection.execSQLQuery(sb.toString(), resultsettype, VxBaseResultSet.CONCUR_READ_ONLY).get();
 				} catch (InterruptedException | ExecutionException e) {
 					throw new SQLException(e);
 				}
@@ -269,7 +271,7 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 				} catch (InterruptedException | ExecutionException e) {
 					throw new SQLException(e);
 				}
-				((PgResultSet) rs).setRefCursor(cursorName);
+				((VxResultSet) rs).setRefCursor(cursorName);
 				return rs;
 			}
 			if ("hstore".equals(type)) {
@@ -286,7 +288,7 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 
 	private void checkScrollable() throws SQLException {
 		checkClosed();
-		if (resultsettype == ResultSet.TYPE_FORWARD_ONLY) {
+		if (resultsettype == VxBaseResultSet.TYPE_FORWARD_ONLY) {
 			throw new PSQLException(
 					GT.tr("Operation requires a scrollable ResultSet, but this ResultSet is FORWARD_ONLY."),
 					PSQLState.INVALID_CURSOR_STATE);
@@ -378,11 +380,11 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 	}
 
 	protected Array makeArray(int oid, byte[] value) throws SQLException {
-		return new PgArray(connection, oid, value);
+		return new PgArray(connection.createConnection(), oid, value);
 	}
 
 	protected Array makeArray(int oid, String value) throws SQLException {
-		return new PgArray(connection, oid, value);
+		return new PgArray(connection.createConnection(), oid, value);
 	}
 
 	public java.sql.Array getArray(int i) throws SQLException {
@@ -411,7 +413,7 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 	}
 
 	protected Blob makeBlob(long oid) throws SQLException {
-		return new PgBlob(connection, oid);
+		return new PgBlob(connection.createConnection(), oid);
 	}
 
 	public Blob getBlob(int i) throws SQLException {
@@ -447,7 +449,7 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 	}
 
 	protected Clob makeClob(long oid) throws SQLException {
-		return new PgClob(connection, oid);
+		return new PgClob(connection.createConnection(), oid);
 	}
 
 	public Clob getClob(int i) throws SQLException {
@@ -685,7 +687,7 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 	}
 
 	// This one needs some thought, as not all ResultSets come from a statement
-	public Statement getStatement() throws SQLException {
+	public VxStatement getStatement() throws SQLException {
 		checkClosed();
 		return statement;
 	}
@@ -844,10 +846,10 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 	public void setFetchDirection(int direction) throws SQLException {
 		checkClosed();
 		switch (direction) {
-		case ResultSet.FETCH_FORWARD:
+		case VxBaseResultSet.FETCH_FORWARD:
 			break;
-		case ResultSet.FETCH_REVERSE:
-		case ResultSet.FETCH_UNKNOWN:
+		case VxBaseResultSet.FETCH_REVERSE:
+		case VxBaseResultSet.FETCH_UNKNOWN:
 			checkScrollable();
 			break;
 		default:
@@ -970,7 +972,7 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 			if (usingOID) {
 				// we have to get the last inserted OID and put it in the resultset
 
-				long insertedOID = ((PgStatement) insertStatement).getLastOID();
+				long insertedOID = insertStatement.getLastOID();
 
 				updateValues.put("oid", insertedOID);
 
@@ -1235,14 +1237,14 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 		// because updateable result sets do not yet support binary transfers we must
 		// request refresh
 		// with updateable result set to get field data in correct format
-		selectStatement = connection.prepareStatement(sqlText, ResultSet.TYPE_SCROLL_INSENSITIVE,
-				ResultSet.CONCUR_UPDATABLE);
+		selectStatement = connection.prepareStatement(sqlText, java.sql.ResultSet.TYPE_SCROLL_INSENSITIVE,
+				java.sql.ResultSet.CONCUR_UPDATABLE);
 
 		for (int j = 0, i = 1; j < numKeys; j++, i++) {
 			selectStatement.setObject(i, primaryKeys.get(j).getValue());
 		}
 
-		PgResultSet rs = (PgResultSet) selectStatement.executeQuery();
+		VxResultSet rs = (VxResultSet) selectStatement.executeQuery();
 
 		if (rs.next()) {
 			rowBuffer = rs.this_row;
@@ -1441,7 +1443,7 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 	boolean isUpdateable() throws SQLException {
 		checkClosed();
 
-		if (resultsetconcurrency == ResultSet.CONCUR_READ_ONLY) {
+		if (resultsetconcurrency == VxBaseResultSet.CONCUR_READ_ONLY) {
 			throw new PSQLException(GT.tr("ResultSets with concurrency CONCUR_READ_ONLY cannot be updated."),
 					PSQLState.INVALID_CURSOR_STATE);
 		}
@@ -1671,8 +1673,8 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 	public class CursorResultHandler extends ResultHandlerBase {
 
 		public void handleResultRows(Query fromQuery, Field[] fields, List<byte[][]> tuples, ResultCursor cursor) {
-			PgResultSet.this.rows = tuples;
-			PgResultSet.this.cursor = cursor;
+			VxResultSet.this.rows = tuples;
+			VxResultSet.this.cursor = cursor;
 		}
 
 		public void handleCommandStatus(String status, int updateCount, long insertOID) {
@@ -1683,13 +1685,13 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 		public void handleCompletion() throws SQLException {
 			SQLWarning warning = getWarning();
 			if (warning != null) {
-				PgResultSet.this.addWarning(warning);
+				VxResultSet.this.addWarning(warning);
 			}
 			super.handleCompletion();
 		}
 	}
 
-	public BaseStatement getPGStatement() {
+	public VxStatement getPGStatement() {
 		return statement;
 	}
 
@@ -1784,7 +1786,7 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 				cursor = null;
 			}
 		} finally {
-			((PgStatement) statement).checkCompletion();
+			statement.checkCompletion();
 		}
 	}
 
@@ -2877,7 +2879,7 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 		this_row = rows.get(current_row);
 		// We only need a copy of the current row if we're going to
 		// modify it via an updatable resultset.
-		if (resultsetconcurrency == ResultSet.CONCUR_UPDATABLE) {
+		if (resultsetconcurrency == VxBaseResultSet.CONCUR_UPDATABLE) {
 			rowBuffer = new byte[this_row.length][];
 			System.arraycopy(this_row, 0, rowBuffer, 0, this_row.length);
 		} else {
@@ -3519,7 +3521,7 @@ public class PgResultSet implements ResultSet, org.postgresql.PGRefCursorResultS
 			return null;
 		}
 
-		return new PgSQLXML(connection, data);
+		return new PgSQLXML(connection.createConnection(), data);
 	}
 
 	public SQLXML getSQLXML(String columnName) throws SQLException {
