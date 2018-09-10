@@ -12,6 +12,7 @@ import org.postgresql.core.v3.TypeTransferModeRegistry;
 import org.postgresql.jdbc.AutoSave;
 import org.postgresql.jdbc.BatchResultHandler;
 import org.postgresql.jdbc.PreferQueryMode;
+import org.postgresql.jdbc.VxBatchResultHandler;
 import org.postgresql.util.HostSpec;
 
 import java.io.IOException;
@@ -459,4 +460,7 @@ public interface QueryExecutor extends TypeTransferModeRegistry {
   void setNetworkTimeout(int milliseconds) throws IOException;
 
   int getNetworkTimeout() throws IOException;
+
+  CompletableFuture<Void> executeAsync(Query[] queries, ParameterList[] parameterLists, VxBatchResultHandler handler,
+      int maxrows, int fetchSize, int flags) throws SQLException;
 }

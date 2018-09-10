@@ -35,6 +35,7 @@ import org.postgresql.core.v3.replication.V3ReplicationProtocol;
 import org.postgresql.jdbc.AutoSave;
 import org.postgresql.jdbc.BatchResultHandler;
 import org.postgresql.jdbc.TimestampUtils;
+import org.postgresql.jdbc.VxBatchResultHandler;
 import org.postgresql.util.GT;
 import org.postgresql.util.PSQLException;
 import org.postgresql.util.PSQLState;
@@ -449,6 +450,73 @@ public class QueryExecutorImpl extends QueryExecutorBase {
 	//
 	private static final int MAX_BUFFERED_RECV_BYTES = 64000;
 	private static final int NODATA_QUERY_RESPONSE_SIZE_BYTES = 250;
+	
+	public synchronized CompletableFuture<Void> executeAsync(Query[] queries, ParameterList[] parameterLists,
+      VxBatchResultHandler batchHandler, int maxRows, int fetchSize, int flags) throws SQLException {
+    waitOnLock();
+    if (LOGGER.isLoggable(Level.FINEST)) {
+      LOGGER.log(Level.FINEST, "  batch execute {0} queries, handler={1}, maxRows={2}, fetchSize={3}, flags={4}",
+          new Object[] { queries.length, batchHandler, maxRows, fetchSize, flags });
+    }
+
+    flags = updateQueryMode(flags);
+
+    boolean describeOnly = (QUERY_DESCRIBE_ONLY & flags) != 0;
+    // Check parameters and resolve OIDs.
+    if (!describeOnly) {
+      for (ParameterList parameterList : parameterLists) {
+        if (parameterList != null) {
+          ((V3ParameterList) parameterList).checkAllParametersSet();
+        }
+      }
+    }
+
+    boolean autosave = false;
+    ResultHandler handler = batchHandler;
+    try {
+      handler = sendQueryPreamble(batchHandler, flags);
+      autosave = sendAutomaticSavepoint(queries[0], flags);
+      estimatedReceiveBufferBytes = 0;
+
+      for (int i = 0; i < queries.length; ++i) {
+        Query query = queries[i];
+        V3ParameterList parameters = (V3ParameterList) parameterLists[i];
+        if (parameters == null) {
+          parameters = SimpleQuery.NO_PARAMETERS;
+        }
+
+        await(sendQueryAsync(query, parameters, maxRows, fetchSize, flags, handler, batchHandler));
+
+        if (handler.getException() != null) {
+          break;
+        }
+      }
+
+      if (handler.getException() == null) {
+        if ((flags & QueryExecutor.QUERY_EXECUTE_AS_SIMPLE) != 0) {
+          // Sync message is not required for 'Q' execution as 'Q' ends with ReadyForQuery
+          // message
+          // on its own
+        } else {
+          sendSync();
+        }
+        await(processResults(handler, flags));
+        estimatedReceiveBufferBytes = 0;
+      }
+    } catch (IOException e) {
+      abort();
+      handler.handleError(new PSQLException(GT.tr("An I/O error occurred while sending to the backend."),
+          PSQLState.CONNECTION_FAILURE, e));
+    }
+
+    try {
+      handler.handleCompletion();
+    } catch (SQLException e) {
+      await(rollbackIfRequired(autosave, e));
+    }
+
+    return CompletableFuture.completedFuture(null);
+  }
 
 	public synchronized CompletableFuture<Void> execute(Query[] queries, ParameterList[] parameterLists,
 			BatchResultHandler batchHandler, int maxRows, int fetchSize, int flags) throws SQLException {
@@ -1304,6 +1372,52 @@ public class QueryExecutorImpl extends QueryExecutorBase {
 
 		return CompletableFuture.completedFuture(op);
 	}
+    
+   private CompletableFuture<Void> flushIfDeadlockRisk(Query query, boolean disallowBatching,
+        ResultHandler resultHandler, VxBatchResultHandler batchHandler, final int flags) throws IOException {
+      // Assume all statements need at least this much reply buffer space,
+      // plus params
+      estimatedReceiveBufferBytes += NODATA_QUERY_RESPONSE_SIZE_BYTES;
+
+      SimpleQuery sq = (SimpleQuery) query;
+      if (sq.isStatementDescribed()) {
+        /*
+         * Estimate the response size of the fields and add it to the expected response
+         * size.
+         *
+         * It's impossible for us to estimate the rowcount. We'll assume one row, as
+         * that's the common case for batches and we're leaving plenty of breathing room
+         * in this approach. It's still not deadlock-proof though; see pgjdbc github
+         * issues #194 and #195.
+         */
+        int maxResultRowSize = sq.getMaxResultRowSize();
+        if (maxResultRowSize >= 0) {
+          estimatedReceiveBufferBytes += maxResultRowSize;
+        } else {
+          LOGGER.log(Level.FINEST, "Couldn't estimate result size or result size unbounded, "
+              + "disabling batching for this query.");
+          disallowBatching = true;
+        }
+      } else {
+        /*
+         * We only describe a statement if we're expecting results from it, so it's
+         * legal to batch unprepared statements. We'll abort later if we get any
+         * uresults from them where none are expected. For now all we can do is hope the
+         * user told us the truth and assume that NODATA_QUERY_RESPONSE_SIZE_BYTES is
+         * enough to cover it.
+         */
+      }
+      if (disallowBatching || estimatedReceiveBufferBytes >= MAX_BUFFERED_RECV_BYTES) {
+        LOGGER.log(Level.FINEST, "Forcing Sync, receive buffer full or batching disallowed");
+        sendSync();
+        await(processResults(resultHandler, flags));
+        estimatedReceiveBufferBytes = 0;
+        if (batchHandler != null) {
+          batchHandler.secureProgress();
+        }
+      }
+      return CompletableFuture.completedFuture(null);
+    }
 
 	/*
 	 * To prevent client/server protocol deadlocks, we try to manage the estimated
@@ -1358,6 +1472,53 @@ public class QueryExecutorImpl extends QueryExecutorBase {
 		}
 		return CompletableFuture.completedFuture(null);
 	}
+	
+	/*
+   * Send a query to the backend.
+   */
+  private CompletableFuture<Void> sendQueryAsync(Query query, V3ParameterList parameters, int maxRows, int fetchSize,
+      int flags, ResultHandler resultHandler, VxBatchResultHandler batchHandler) throws IOException, SQLException {
+    // Now the query itself.
+    Query[] subqueries = query.getSubqueries();
+    SimpleParameterList[] subparams = parameters.getSubparams();
+
+    // We know this is deprecated, but still respect it in case anyone's using it.
+    // PgJDBC its self no longer does.
+    @SuppressWarnings("deprecation")
+    boolean disallowBatching = (flags & QueryExecutor.QUERY_DISALLOW_BATCHING) != 0;
+
+    if (subqueries == null) {
+      await(flushIfDeadlockRisk(query, disallowBatching, resultHandler, batchHandler, flags));
+
+      // If we saw errors, don't send anything more.
+      if (resultHandler.getException() == null) {
+        sendOneQuery((SimpleQuery) query, (SimpleParameterList) parameters, maxRows, fetchSize, flags);
+      }
+    } else {
+      for (int i = 0; i < subqueries.length; ++i) {
+        final Query subquery = subqueries[i];
+        await(flushIfDeadlockRisk(subquery, disallowBatching, resultHandler, batchHandler, flags));
+
+        // If we saw errors, don't send anything more.
+        if (resultHandler.getException() != null) {
+          break;
+        }
+
+        // In the situation where parameters is already
+        // NO_PARAMETERS it cannot know the correct
+        // number of array elements to return in the
+        // above call to getSubparams(), so it must
+        // return null which we check for here.
+        //
+        SimpleParameterList subparam = SimpleQuery.NO_PARAMETERS;
+        if (subparams != null) {
+          subparam = subparams[i];
+        }
+        sendOneQuery((SimpleQuery) subquery, subparam, maxRows, fetchSize, flags);
+      }
+    }
+    return CompletableFuture.completedFuture(null);
+  }
 
 	/*
 	 * Send a query to the backend.
