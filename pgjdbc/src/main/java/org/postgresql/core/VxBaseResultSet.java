@@ -7,6 +7,7 @@ import java.sql.Array;
 import java.sql.Blob;
 import java.sql.Clob;
 import java.sql.DatabaseMetaData;
+import java.sql.Date;
 import java.sql.JDBCType;
 import java.sql.NClob;
 import java.sql.Ref;
@@ -18,7 +19,10 @@ import java.sql.SQLType;
 import java.sql.SQLWarning;
 import java.sql.SQLXML;
 import java.sql.Statement;
+import java.sql.Time;
+import java.sql.Timestamp;
 import java.util.Calendar;
+import java.util.concurrent.CompletableFuture;
 
 import org.postgresql.jdbc.VxStatement;
 
@@ -50,7 +54,7 @@ public interface VxBaseResultSet {
    * @exception SQLException if a database access error occurs or this method is
    *            called on a closed result set
    */
-  boolean next() throws SQLException;
+  CompletableFuture<Boolean> next() throws SQLException;
 
 
   /**
@@ -111,7 +115,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  String getString(int columnIndex) throws SQLException;
+  CompletableFuture<String> getString(int columnIndex) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -132,7 +136,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  boolean getBoolean(int columnIndex) throws SQLException;
+  CompletableFuture<Boolean> getBoolean(int columnIndex) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -146,7 +150,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  byte getByte(int columnIndex) throws SQLException;
+  CompletableFuture<Byte> getByte(int columnIndex) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -160,7 +164,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  short getShort(int columnIndex) throws SQLException;
+  CompletableFuture<Short> getShort(int columnIndex) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -174,7 +178,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  int getInt(int columnIndex) throws SQLException;
+  CompletableFuture<Integer> getInt(int columnIndex) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -188,7 +192,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  long getLong(int columnIndex) throws SQLException;
+  CompletableFuture<Long> getLong(int columnIndex) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -202,7 +206,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  float getFloat(int columnIndex) throws SQLException;
+  CompletableFuture<Float> getFloat(int columnIndex) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -216,7 +220,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  double getDouble(int columnIndex) throws SQLException;
+  CompletableFuture<Double> getDouble(int columnIndex) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -236,7 +240,7 @@ public interface VxBaseResultSet {
    *             or {@code getBigDecimal(String columnLabel)}
    */
   @Deprecated
-  BigDecimal getBigDecimal(int columnIndex, int scale) throws SQLException;
+  CompletableFuture<BigDecimal> getBigDecimal(int columnIndex, int scale) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -265,7 +269,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  java.sql.Date getDate(int columnIndex) throws SQLException;
+  CompletableFuture<Date> getDate(int columnIndex) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -279,7 +283,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  java.sql.Time getTime(int columnIndex) throws SQLException;
+  CompletableFuture<Time> getTime(int columnIndex) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -293,7 +297,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  java.sql.Timestamp getTimestamp(int columnIndex) throws SQLException;
+  CompletableFuture<Timestamp> getTimestamp(int columnIndex) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -320,7 +324,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  java.io.InputStream getAsciiStream(int columnIndex) throws SQLException;
+  CompletableFuture<InputStream> getAsciiStream(int columnIndex) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -356,7 +360,7 @@ public interface VxBaseResultSet {
    *              <code>getUnicodeStream</code>
    */
   @Deprecated
-  java.io.InputStream getUnicodeStream(int columnIndex) throws SQLException;
+  CompletableFuture<InputStream> getUnicodeStream(int columnIndex) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -399,7 +403,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  String getString(String columnLabel) throws SQLException;
+  CompletableFuture<String> getString(String columnLabel) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -420,7 +424,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  boolean getBoolean(String columnLabel) throws SQLException;
+  CompletableFuture<Boolean> getBoolean(String columnLabel) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -434,7 +438,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  byte getByte(String columnLabel) throws SQLException;
+  CompletableFuture<Byte> getByte(String columnLabel) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -448,7 +452,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  short getShort(String columnLabel) throws SQLException;
+  CompletableFuture<Short> getShort(String columnLabel) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -462,7 +466,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  int getInt(String columnLabel) throws SQLException;
+  CompletableFuture<Integer> getInt(String columnLabel) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -476,7 +480,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  long getLong(String columnLabel) throws SQLException;
+  CompletableFuture<Long> getLong(String columnLabel) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -490,7 +494,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  float getFloat(String columnLabel) throws SQLException;
+  CompletableFuture<Float> getFloat(String columnLabel) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -504,7 +508,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  double getDouble(String columnLabel) throws SQLException;
+  CompletableFuture<Double> getDouble(String columnLabel) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -524,7 +528,7 @@ public interface VxBaseResultSet {
    *             or {@code getBigDecimal(String columnLabel)}
    */
   @Deprecated
-  BigDecimal getBigDecimal(String columnLabel, int scale) throws SQLException;
+  CompletableFuture<BigDecimal> getBigDecimal(String columnLabel, int scale) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -553,7 +557,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  java.sql.Date getDate(String columnLabel) throws SQLException;
+  CompletableFuture<Date> getDate(String columnLabel) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -568,7 +572,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  java.sql.Time getTime(String columnLabel) throws SQLException;
+  CompletableFuture<Time> getTime(String columnLabel) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -582,7 +586,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  java.sql.Timestamp getTimestamp(String columnLabel) throws SQLException;
+  CompletableFuture<Timestamp> getTimestamp(String columnLabel) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -608,7 +612,7 @@ public interface VxBaseResultSet {
    * if a database access error occurs or this method is
    *            called on a closed result set
    */
-  java.io.InputStream getAsciiStream(String columnLabel) throws SQLException;
+  CompletableFuture<InputStream> getAsciiStream(String columnLabel) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -642,7 +646,7 @@ public interface VxBaseResultSet {
    * @deprecated use <code>getCharacterStream</code> instead
    */
   @Deprecated
-  java.io.InputStream getUnicodeStream(String columnLabel) throws SQLException;
+  CompletableFuture<InputStream> getUnicodeStream(String columnLabel) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -847,7 +851,7 @@ public interface VxBaseResultSet {
    *            called on a closed result set
    * @since 1.2
    */
-  java.io.Reader getCharacterStream(int columnIndex) throws SQLException;
+  CompletableFuture<Reader> getCharacterStream(int columnIndex) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -863,7 +867,7 @@ public interface VxBaseResultSet {
    *            called on a closed result set
    * @since 1.2
    */
-  java.io.Reader getCharacterStream(String columnLabel) throws SQLException;
+  CompletableFuture<Reader> getCharacterStream(String columnLabel) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -879,7 +883,7 @@ public interface VxBaseResultSet {
    *            called on a closed result set
    * @since 1.2
    */
-  BigDecimal getBigDecimal(int columnIndex) throws SQLException;
+  CompletableFuture<BigDecimal> getBigDecimal(int columnIndex) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -896,7 +900,7 @@ public interface VxBaseResultSet {
    * @since 1.2
    *
    */
-  BigDecimal getBigDecimal(String columnLabel) throws SQLException;
+  CompletableFuture<BigDecimal> getBigDecimal(String columnLabel) throws SQLException;
 
   //---------------------------------------------------------------------
   // Traversal/Positioning
@@ -977,7 +981,7 @@ public interface VxBaseResultSet {
    * this method
    * @since 1.2
    */
-  boolean isLast() throws SQLException;
+  CompletableFuture<Boolean> isLast() throws SQLException;
 
   /**
    * Moves the cursor to the front of
@@ -2157,6 +2161,7 @@ public interface VxBaseResultSet {
    * Inserts the contents of the insert row into this
    * <code>ResultSet</code> object and into the database.
    * The cursor must be on the insert row when this method is called.
+   * @return 
    *
    * @exception SQLException if a database access error occurs;
    * the result set concurrency is <code>CONCUR_READ_ONLY</code>,
@@ -2168,12 +2173,13 @@ public interface VxBaseResultSet {
    * this method
    * @since 1.2
    */
-  void insertRow() throws SQLException;
+  CompletableFuture<Void> insertRow() throws SQLException;
 
   /**
    * Updates the underlying database with the new contents of the
    * current row of this <code>ResultSet</code> object.
    * This method cannot be called when the cursor is on the insert row.
+   * @return 
    *
    * @exception SQLException if a database access error occurs;
    * the result set concurrency is <code>CONCUR_READ_ONLY</code>;
@@ -2183,12 +2189,13 @@ public interface VxBaseResultSet {
    * this method
    * @since 1.2
    */
-  void updateRow() throws SQLException;
+  CompletableFuture<Void> updateRow() throws SQLException;
 
   /**
    * Deletes the current row from this <code>ResultSet</code> object
    * and from the underlying database.  This method cannot be called when
    * the cursor is on the insert row.
+   * @return 
    *
    * @exception SQLException if a database access error occurs;
    * the result set concurrency is <code>CONCUR_READ_ONLY</code>;
@@ -2198,7 +2205,7 @@ public interface VxBaseResultSet {
    * this method
    * @since 1.2
    */
-  void deleteRow() throws SQLException;
+  CompletableFuture<Void> deleteRow() throws SQLException;
 
   /**
    * Refreshes the current row with its most recent value in
@@ -2220,6 +2227,7 @@ public interface VxBaseResultSet {
    * the method <code>updateRow</code>, then the
    * updates made to the row are lost.  Calling the method
    * <code>refreshRow</code> frequently will likely slow performance.
+   * @return 
    *
    * @exception SQLException if a database access error
    * occurs; this method is called on a closed result set;
@@ -2230,7 +2238,7 @@ public interface VxBaseResultSet {
    * set type and result set concurrency.
    * @since 1.2
    */
-  void refreshRow() throws SQLException;
+  CompletableFuture<Void> refreshRow() throws SQLException;
 
   /**
    * Cancels the updates made to the current row in this
@@ -2366,7 +2374,7 @@ public interface VxBaseResultSet {
    * this method
    * @since 1.2
    */
-  Blob getBlob(int columnIndex) throws SQLException;
+  CompletableFuture<Blob> getBlob(int columnIndex) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -2383,7 +2391,7 @@ public interface VxBaseResultSet {
    * this method
    * @since 1.2
    */
-  Clob getClob(int columnIndex) throws SQLException;
+  CompletableFuture<Clob> getClob(int columnIndex) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -2400,7 +2408,7 @@ public interface VxBaseResultSet {
    * this method
    * @since 1.2
    */
-  Array getArray(int columnIndex) throws SQLException;
+  CompletableFuture<Array> getArray(int columnIndex) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -2458,7 +2466,7 @@ public interface VxBaseResultSet {
    * this method
    * @since 1.2
    */
-  Blob getBlob(String columnLabel) throws SQLException;
+  CompletableFuture<Blob> getBlob(String columnLabel) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -2475,7 +2483,7 @@ public interface VxBaseResultSet {
    * this method
    * @since 1.2
    */
-  Clob getClob(String columnLabel) throws SQLException;
+  CompletableFuture<Clob> getClob(String columnLabel) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -2492,7 +2500,7 @@ public interface VxBaseResultSet {
    * this method
    * @since 1.2
    */
-  Array getArray(String columnLabel) throws SQLException;
+  CompletableFuture<Array> getArray(String columnLabel) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -2513,7 +2521,7 @@ public interface VxBaseResultSet {
    * or this method is called on a closed result set
    * @since 1.2
    */
-  java.sql.Date getDate(int columnIndex, Calendar cal) throws SQLException;
+  CompletableFuture<Date> getDate(int columnIndex, Calendar cal) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -2534,7 +2542,7 @@ public interface VxBaseResultSet {
    * or this method is called on a closed result set
    * @since 1.2
    */
-  java.sql.Date getDate(String columnLabel, Calendar cal) throws SQLException;
+  CompletableFuture<Date> getDate(String columnLabel, Calendar cal) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -2555,7 +2563,7 @@ public interface VxBaseResultSet {
    * or this method is called on a closed result set
    * @since 1.2
    */
-  java.sql.Time getTime(int columnIndex, Calendar cal) throws SQLException;
+  CompletableFuture<Object> getTime(int columnIndex, Calendar cal) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -2576,7 +2584,7 @@ public interface VxBaseResultSet {
    * or this method is called on a closed result set
    * @since 1.2
    */
-  java.sql.Time getTime(String columnLabel, Calendar cal) throws SQLException;
+  CompletableFuture<Object> getTime(String columnLabel, Calendar cal) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in the current row
@@ -2597,7 +2605,7 @@ public interface VxBaseResultSet {
    * or this method is called on a closed result set
    * @since 1.2
    */
-  java.sql.Timestamp getTimestamp(int columnIndex, Calendar cal)
+  CompletableFuture<Timestamp> getTimestamp(int columnIndex, Calendar cal)
     throws SQLException;
 
   /**
@@ -2619,7 +2627,7 @@ public interface VxBaseResultSet {
    * or this method is called on a closed result set
    * @since 1.2
    */
-  java.sql.Timestamp getTimestamp(String columnLabel, Calendar cal)
+  CompletableFuture<Timestamp> getTimestamp(String columnLabel, Calendar cal)
     throws SQLException;
 
   //-------------------------- JDBC 3.0 ----------------------------------------
@@ -3060,7 +3068,7 @@ public interface VxBaseResultSet {
    * this method
    * @since 1.6
    */
-  SQLXML getSQLXML(int columnIndex) throws SQLException;
+  CompletableFuture<SQLXML> getSQLXML(int columnIndex) throws SQLException;
 
   /**
    * Retrieves the value of the designated column in  the current row of
@@ -3075,7 +3083,7 @@ public interface VxBaseResultSet {
    * this method
    * @since 1.6
    */
-  SQLXML getSQLXML(String columnLabel) throws SQLException;
+  CompletableFuture<SQLXML> getSQLXML(String columnLabel) throws SQLException;
   /**
    * Updates the designated column with a <code>java.sql.SQLXML</code> value.
    * The updater
@@ -3990,7 +3998,7 @@ public interface VxBaseResultSet {
    * this method
    * @since 1.7
    */
-   public <T> T getObject(int columnIndex, Class<T> type) throws SQLException;
+   public <T> CompletableFuture<T> getObject(int columnIndex, Class<T> type) throws SQLException;
 
 
   /**
@@ -4021,7 +4029,7 @@ public interface VxBaseResultSet {
    * this method
    * @since 1.7
    */
-   public <T> T getObject(String columnLabel, Class<T> type) throws SQLException;
+   public <T> CompletableFuture<T> getObject(String columnLabel, Class<T> type) throws SQLException;
 
   //------------------------- JDBC 4.2 -----------------------------------
 

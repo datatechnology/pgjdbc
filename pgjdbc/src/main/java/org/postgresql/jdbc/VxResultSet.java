@@ -174,67 +174,67 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		return getURL(findColumn(columnName));
 	}
 
-	protected Object internalGetObject(int columnIndex, Field field) throws SQLException {
+	protected CompletableFuture<Object> internalGetObject(int columnIndex, Field field) throws SQLException {
 		switch (getSQLType(columnIndex)) {
 		case Types.BOOLEAN:
 		case Types.BIT:
-			return getBoolean(columnIndex);
+			return CompletableFuture.completedFuture(await(getBoolean(columnIndex)));
 		case Types.SQLXML:
-			return getSQLXML(columnIndex);
+			return CompletableFuture.completedFuture(await(getSQLXML(columnIndex)));
 		case Types.TINYINT:
 		case Types.SMALLINT:
 		case Types.INTEGER:
-			return getInt(columnIndex);
+			return CompletableFuture.completedFuture(await(getInt(columnIndex)));
 		case Types.BIGINT:
-			return getLong(columnIndex);
+			return CompletableFuture.completedFuture(await(getLong(columnIndex)));
 		case Types.NUMERIC:
 		case Types.DECIMAL:
-			return getBigDecimal(columnIndex, (field.getMod() == -1) ? -1 : ((field.getMod() - 4) & 0xffff));
+			return CompletableFuture.completedFuture(await(getBigDecimal(columnIndex, (field.getMod() == -1) ? -1 : ((field.getMod() - 4) & 0xffff))));
 		case Types.REAL:
-			return getFloat(columnIndex);
+			return CompletableFuture.completedFuture(await(getFloat(columnIndex)));
 		case Types.FLOAT:
 		case Types.DOUBLE:
-			return getDouble(columnIndex);
+			return CompletableFuture.completedFuture(await(getDouble(columnIndex)));
 		case Types.CHAR:
 		case Types.VARCHAR:
 		case Types.LONGVARCHAR:
-			return getString(columnIndex);
+			return CompletableFuture.completedFuture(await(getString(columnIndex)));
 		case Types.DATE:
-			return getDate(columnIndex);
+			return CompletableFuture.completedFuture(await(getDate(columnIndex)));
 		case Types.TIME:
-			return getTime(columnIndex);
+			return CompletableFuture.completedFuture(await(getTime(columnIndex)));
 		case Types.TIMESTAMP:
-			return getTimestamp(columnIndex, null);
+			return CompletableFuture.completedFuture(await(getTimestamp(columnIndex, null)));
 		case Types.BINARY:
 		case Types.VARBINARY:
 		case Types.LONGVARBINARY:
-			return getBytes(columnIndex);
+			return CompletableFuture.completedFuture(getBytes(columnIndex));
 		case Types.ARRAY:
-			return getArray(columnIndex);
+			return CompletableFuture.completedFuture(await(getArray(columnIndex)));
 		case Types.CLOB:
-			return getClob(columnIndex);
+			return CompletableFuture.completedFuture(await(getClob(columnIndex)));
 		case Types.BLOB:
-			return getBlob(columnIndex);
+			return CompletableFuture.completedFuture(await(getBlob(columnIndex)));
 
 		default:
 			String type = getPGType(columnIndex);
 
 			// if the backend doesn't know the type then coerce to String
 			if (type.equals("unknown")) {
-				return getString(columnIndex);
+				return CompletableFuture.completedFuture(await(getString(columnIndex)));
 			}
 
 			if (type.equals("uuid")) {
 				if (isBinary(columnIndex)) {
-					return getUUID(this_row[columnIndex - 1]);
+					return CompletableFuture.completedFuture(getUUID(this_row[columnIndex - 1]));
 				}
-				return getUUID(getString(columnIndex));
+				return CompletableFuture.completedFuture(getUUID(await(getString(columnIndex))));
 			}
 
 			// Specialized support for ref cursors is neater.
 			if (type.equals("refcursor")) {
 				// Fetch all results.
-				String cursorName = getString(columnIndex);
+				String cursorName = await(getString(columnIndex));
 
 				StringBuilder sb = new StringBuilder("FETCH ALL IN ");
 				Utils.escapeIdentifier(sb, cursorName);
@@ -249,13 +249,8 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 				//
 				// We take the scrollability from the statement, but until
 				// we have updatable cursors it must be readonly.
-				VxResultSet rs;
-				try {
-					rs = (VxResultSet) connection.execSQLQuery(sb.toString(), resultsettype, VxBaseResultSet.CONCUR_READ_ONLY).get();
-				} catch (InterruptedException | ExecutionException e) {
-					throw new SQLException(e);
-				}
-
+				VxResultSet rs = (VxResultSet) await(connection.execSQLQuery(sb.toString(), resultsettype, java.sql.ResultSet.CONCUR_READ_ONLY));
+				
 				//
 				// In long running transactions these backend cursors take up memory space
 				// we could close in rs.close(), but if the transaction is closed before the
@@ -272,13 +267,13 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 					throw new SQLException(e);
 				}
 				((VxResultSet) rs).setRefCursor(cursorName);
-				return rs;
+				return CompletableFuture.completedFuture(rs);
 			}
 			if ("hstore".equals(type)) {
 				if (isBinary(columnIndex)) {
-					return HStoreConverter.fromBytes(this_row[columnIndex - 1], connection.getEncoding());
+					return CompletableFuture.completedFuture(HStoreConverter.fromBytes(this_row[columnIndex - 1], connection.getEncoding()));
 				}
-				return HStoreConverter.fromString(getString(columnIndex));
+				return CompletableFuture.completedFuture(HStoreConverter.fromString(await(getString(columnIndex))));
 			}
 
 			// Caller determines what to do (JDBC3 overrides in this case)
@@ -375,7 +370,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		return true;
 	}
 
-	public java.sql.Array getArray(String colName) throws SQLException {
+	public CompletableFuture<Array> getArray(String colName) throws SQLException {
 		return getArray(findColumn(colName));
 	}
 
@@ -387,7 +382,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		return new PgArray(connection.createConnection(), oid, value);
 	}
 
-	public java.sql.Array getArray(int i) throws SQLException {
+	public CompletableFuture<java.sql.Array> getArray(int i) throws SQLException {
 		checkResultSet(i);
 		if (wasNullFlag) {
 			return null;
@@ -395,20 +390,20 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 
 		int oid = fields[i - 1].getOID();
 		if (isBinary(i)) {
-			return makeArray(oid, this_row[i - 1]);
+			return CompletableFuture.completedFuture(makeArray(oid, this_row[i - 1]));
 		}
-		return makeArray(oid, getFixedString(i));
+		return CompletableFuture.completedFuture(makeArray(oid, await(getFixedString(i))));
 	}
 
-	public java.math.BigDecimal getBigDecimal(int columnIndex) throws SQLException {
+	public CompletableFuture<java.math.BigDecimal> getBigDecimal(int columnIndex) throws SQLException {
 		return getBigDecimal(columnIndex, -1);
 	}
 
-	public java.math.BigDecimal getBigDecimal(String columnName) throws SQLException {
+	public CompletableFuture<java.math.BigDecimal> getBigDecimal(String columnName) throws SQLException {
 		return getBigDecimal(findColumn(columnName));
 	}
 
-	public Blob getBlob(String columnName) throws SQLException {
+	public CompletableFuture<Blob> getBlob(String columnName) throws SQLException {
 		return getBlob(findColumn(columnName));
 	}
 
@@ -416,23 +411,23 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		return new PgBlob(connection.createConnection(), oid);
 	}
 
-	public Blob getBlob(int i) throws SQLException {
+	public CompletableFuture<Blob> getBlob(int i) throws SQLException {
 		checkResultSet(i);
 		if (wasNullFlag) {
 			return null;
 		}
 
-		return makeBlob(getLong(i));
+		return CompletableFuture.completedFuture(makeBlob(await(getLong(i))));
 	}
 
-	public java.io.Reader getCharacterStream(String columnName) throws SQLException {
+	public CompletableFuture<Reader> getCharacterStream(String columnName) throws SQLException {
 		return getCharacterStream(findColumn(columnName));
 	}
 
-	public java.io.Reader getCharacterStream(int i) throws SQLException {
+	public CompletableFuture<java.io.Reader> getCharacterStream(int i) throws SQLException {
 		checkResultSet(i);
 		if (wasNullFlag) {
-			return null;
+			return CompletableFuture.completedFuture(null);
 		}
 
 		// Version 7.2 supports AsciiStream for all the PG text types
@@ -441,10 +436,10 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		// long string datatype, but with toast the text datatype is capable of
 		// handling very large values. Thus the implementation ends up calling
 		// getString() since there is no current way to stream the value from the server
-		return new CharArrayReader(getString(i).toCharArray());
+		return CompletableFuture.completedFuture(new CharArrayReader(await(getString(i)).toCharArray()));
 	}
 
-	public Clob getClob(String columnName) throws SQLException {
+	public CompletableFuture<Clob> getClob(String columnName) throws SQLException {
 		return getClob(findColumn(columnName));
 	}
 
@@ -452,13 +447,13 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		return new PgClob(connection.createConnection(), oid);
 	}
 
-	public Clob getClob(int i) throws SQLException {
+	public CompletableFuture<Clob> getClob(int i) throws SQLException {
 		checkResultSet(i);
 		if (wasNullFlag) {
 			return null;
 		}
 
-		return makeClob(getLong(i));
+		return CompletableFuture.completedFuture(makeClob(await(getLong(i))));
 	}
 
 	public int getConcurrency() throws SQLException {
@@ -467,7 +462,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 	}
 
 	@Override
-	public java.sql.Date getDate(int i, java.util.Calendar cal) throws SQLException {
+	public CompletableFuture<java.sql.Date> getDate(int i, java.util.Calendar cal) throws SQLException {
 		checkResultSet(i);
 		if (wasNullFlag) {
 			return null;
@@ -481,28 +476,28 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 			int oid = fields[col].getOID();
 			TimeZone tz = cal.getTimeZone();
 			if (oid == Oid.DATE) {
-				return connection.getTimestampUtils().toDateBin(tz, this_row[col]);
+				return CompletableFuture.completedFuture(connection.getTimestampUtils().toDateBin(tz, this_row[col]));
 			} else if (oid == Oid.TIMESTAMP || oid == Oid.TIMESTAMPTZ) {
 				// If backend provides just TIMESTAMP, we use "cal" timezone
 				// If backend provides TIMESTAMPTZ, we ignore "cal" as we know true instant
 				// value
-				Timestamp timestamp = getTimestamp(i, cal);
+				Timestamp timestamp = await(getTimestamp(i, cal));
 				// Here we just truncate date to 00:00 in a given time zone
-				return connection.getTimestampUtils().convertToDate(timestamp.getTime(), tz);
+				return CompletableFuture.completedFuture(connection.getTimestampUtils().convertToDate(timestamp.getTime(), tz));
 			} else {
 				throw new PSQLException(GT.tr("Cannot convert the column of type {0} to requested type {1}.",
 						Oid.toString(oid), "date"), PSQLState.DATA_TYPE_MISMATCH);
 			}
 		}
 
-		return connection.getTimestampUtils().toDate(cal, getString(i));
+		return CompletableFuture.completedFuture(connection.getTimestampUtils().toDate(cal, await(getString(i))));
 	}
 
 	@Override
-	public Time getTime(int i, java.util.Calendar cal) throws SQLException {
+	public CompletableFuture<Object> getTime(int i, java.util.Calendar cal) throws SQLException {
 		checkResultSet(i);
 		if (wasNullFlag) {
-			return null;
+			return CompletableFuture.completedFuture(null);
 		}
 
 		if (cal == null) {
@@ -513,33 +508,33 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 			int oid = fields[col].getOID();
 			TimeZone tz = cal.getTimeZone();
 			if (oid == Oid.TIME || oid == Oid.TIMETZ) {
-				return connection.getTimestampUtils().toTimeBin(tz, this_row[col]);
+				return CompletableFuture.completedFuture(connection.getTimestampUtils().toTimeBin(tz, this_row[col]));
 			} else if (oid == Oid.TIMESTAMP || oid == Oid.TIMESTAMPTZ) {
 				// If backend provides just TIMESTAMP, we use "cal" timezone
 				// If backend provides TIMESTAMPTZ, we ignore "cal" as we know true instant
 				// value
-				Timestamp timestamp = getTimestamp(i, cal);
+				Timestamp timestamp = await(getTimestamp(i, cal));
 				long timeMillis = timestamp.getTime();
 				if (oid == Oid.TIMESTAMPTZ) {
 					// time zone == UTC since BINARY "timestamp with time zone" is always sent in
 					// UTC
 					// So we truncate days
-					return new Time(timeMillis % TimeUnit.DAYS.toMillis(1));
+					return CompletableFuture.completedFuture(new Time(timeMillis % TimeUnit.DAYS.toMillis(1)));
 				}
 				// Here we just truncate date part
-				return connection.getTimestampUtils().convertToTime(timeMillis, tz);
+				return CompletableFuture.completedFuture(connection.getTimestampUtils().convertToTime(timeMillis, tz));
 			} else {
 				throw new PSQLException(GT.tr("Cannot convert the column of type {0} to requested type {1}.",
 						Oid.toString(oid), "time"), PSQLState.DATA_TYPE_MISMATCH);
 			}
 		}
 
-		String string = getString(i);
-		return connection.getTimestampUtils().toTime(cal, string);
+		String string = await(getString(i));
+		return CompletableFuture.completedFuture(connection.getTimestampUtils().toTime(cal, string));
 	}
 
 	// #if mvn.project.property.postgresql.jdbc.spec >= "JDBC4.2"
-	private LocalTime getLocalTime(int i) throws SQLException {
+	private CompletableFuture<LocalTime> getLocalTime(int i) throws SQLException {
 		checkResultSet(i);
 		if (wasNullFlag) {
 			return null;
@@ -549,20 +544,20 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 			int col = i - 1;
 			int oid = fields[col].getOID();
 			if (oid == Oid.TIME) {
-				return connection.getTimestampUtils().toLocalTimeBin(this_row[col]);
+				return CompletableFuture.completedFuture(connection.getTimestampUtils().toLocalTimeBin(this_row[col]));
 			} else {
 				throw new PSQLException(GT.tr("Cannot convert the column of type {0} to requested type {1}.",
 						Oid.toString(oid), "time"), PSQLState.DATA_TYPE_MISMATCH);
 			}
 		}
 
-		String string = getString(i);
-		return connection.getTimestampUtils().toLocalTime(string);
+		String string = await(getString(i));
+		return CompletableFuture.completedFuture(connection.getTimestampUtils().toLocalTime(string));
 	}
 	// #endif
 
 	@Override
-	public Timestamp getTimestamp(int i, java.util.Calendar cal) throws SQLException {
+	public CompletableFuture<Timestamp> getTimestamp(int i, java.util.Calendar cal) throws SQLException {
 		checkResultSet(i);
 		if (wasNullFlag) {
 			return null;
@@ -577,35 +572,35 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 			if (oid == Oid.TIMESTAMPTZ || oid == Oid.TIMESTAMP) {
 				boolean hasTimeZone = oid == Oid.TIMESTAMPTZ;
 				TimeZone tz = cal.getTimeZone();
-				return connection.getTimestampUtils().toTimestampBin(tz, this_row[col], hasTimeZone);
+				return CompletableFuture.completedFuture(connection.getTimestampUtils().toTimestampBin(tz, this_row[col], hasTimeZone));
 			} else {
 				// JDBC spec says getTimestamp of Time and Date must be supported
 				long millis;
 				if (oid == Oid.TIME || oid == Oid.TIMETZ) {
-					millis = getTime(i, cal).getTime();
+					millis = ((Time)await(getTime(i, cal))).getTime();
 				} else if (oid == Oid.DATE) {
-					millis = getDate(i, cal).getTime();
+					millis = await(getDate(i, cal)).getTime();
 				} else {
 					throw new PSQLException(GT.tr("Cannot convert the column of type {0} to requested type {1}.",
 							Oid.toString(oid), "timestamp"), PSQLState.DATA_TYPE_MISMATCH);
 				}
-				return new Timestamp(millis);
+				return CompletableFuture.completedFuture(new Timestamp(millis));
 			}
 		}
 
 		// If this is actually a timestamptz, the server-provided timezone will override
 		// the one we pass in, which is the desired behaviour. Otherwise, we'll
 		// interpret the timezone-less value in the provided timezone.
-		String string = getString(i);
+		String string = await(getString(i));
 		if (oid == Oid.TIME || oid == Oid.TIMETZ) {
 			// If server sends us a TIME, we ensure java counterpart has date of 1970-01-01
-			return new Timestamp(connection.getTimestampUtils().toTime(cal, string).getTime());
+			return CompletableFuture.completedFuture(new Timestamp(connection.getTimestampUtils().toTime(cal, string).getTime()));
 		}
-		return connection.getTimestampUtils().toTimestamp(cal, string);
+		return CompletableFuture.completedFuture(connection.getTimestampUtils().toTimestamp(cal, string));
 	}
 
 	// #if mvn.project.property.postgresql.jdbc.spec >= "JDBC4.2"
-	private LocalDateTime getLocalDateTime(int i) throws SQLException {
+	private CompletableFuture<LocalDateTime> getLocalDateTime(int i) throws SQLException {
 		checkResultSet(i);
 		if (wasNullFlag) {
 			return null;
@@ -619,23 +614,23 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		}
 		if (isBinary(i)) {
 			TimeZone timeZone = getDefaultCalendar().getTimeZone();
-			return connection.getTimestampUtils().toLocalDateTimeBin(timeZone, this_row[col]);
+			return CompletableFuture.completedFuture(connection.getTimestampUtils().toLocalDateTimeBin(timeZone, this_row[col]));
 		}
 
-		String string = getString(i);
-		return connection.getTimestampUtils().toLocalDateTime(string);
+		String string = await(getString(i));
+		return CompletableFuture.completedFuture(connection.getTimestampUtils().toLocalDateTime(string));
 	}
 	// #endif
 
-	public java.sql.Date getDate(String c, java.util.Calendar cal) throws SQLException {
+	public CompletableFuture<Date> getDate(String c, java.util.Calendar cal) throws SQLException {
 		return getDate(findColumn(c), cal);
 	}
 
-	public Time getTime(String c, java.util.Calendar cal) throws SQLException {
+	public CompletableFuture<Object> getTime(String c, java.util.Calendar cal) throws SQLException {
 		return getTime(findColumn(c), cal);
 	}
 
-	public Timestamp getTimestamp(String c, java.util.Calendar cal) throws SQLException {
+	public CompletableFuture<Timestamp> getTimestamp(String c, java.util.Calendar cal) throws SQLException {
 		return getTimestamp(findColumn(c), cal);
 	}
 
@@ -644,7 +639,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		return fetchdirection;
 	}
 
-	public Object getObjectImpl(String columnName, Map<String, Class<?>> map) throws SQLException {
+	public CompletableFuture<Object> getObjectImpl(String columnName, Map<String, Class<?>> map) throws SQLException {
 		return getObjectImpl(findColumn(columnName), map);
 	}
 
@@ -652,7 +647,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 	 * This checks against map for the type of column i, and if found returns an
 	 * object based on that mapping. The class must implement the SQLData interface.
 	 */
-	public Object getObjectImpl(int i, Map<String, Class<?>> map) throws SQLException {
+	public CompletableFuture<Object> getObjectImpl(int i, Map<String, Class<?>> map) throws SQLException {
 		checkClosed();
 		if (map == null || map.isEmpty()) {
 			return getObject(i);
@@ -733,32 +728,32 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		return ((row_offset + current_row) == 0);
 	}
 
-	public boolean isLast() throws SQLException {
+	public CompletableFuture<Boolean> isLast() throws SQLException {
 		checkClosed();
 		if (onInsertRow) {
-			return false;
+			return CompletableFuture.completedFuture(false);
 		}
 
 		final int rows_size = rows.size();
 
 		if (rows_size == 0) {
-			return false; // No rows.
+			return CompletableFuture.completedFuture(false); // No rows.
 		}
 
 		if (current_row != (rows_size - 1)) {
-			return false; // Not on the last row of this block.
+			return CompletableFuture.completedFuture(false); // Not on the last row of this block.
 		}
 
 		// We are on the last row of the current block.
 
 		if (cursor == null) {
 			// This is the last block and therefore the last row.
-			return true;
+			return CompletableFuture.completedFuture(true);
 		}
 
 		if (maxRows > 0 && row_offset + current_row == maxRows) {
 			// We are implicitly limited by maxRows.
-			return true;
+			return CompletableFuture.completedFuture(true);
 		}
 
 		// Now the more painful case begins.
@@ -782,18 +777,14 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		}
 
 		// Do the actual fetch.
-		try {
-			connection.getQueryExecutor().fetch(cursor, new CursorResultHandler(), fetchRows).get();
-		} catch (InterruptedException | ExecutionException e) {
-			throw new SQLException(e);
-		}
+		await(connection.getQueryExecutor().fetch(cursor, new CursorResultHandler(), fetchRows));
 
 		// Now prepend our one saved row and move to it.
 		rows.add(0, this_row);
 		current_row = 0;
 
 		// Finally, now we can tell if we're the last row or not.
-		return (rows.size() == 1);
+		return CompletableFuture.completedFuture((rows.size() == 1));
 	}
 
 	public boolean last() throws SQLException {
@@ -874,7 +865,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		}
 	}
 
-	public synchronized void deleteRow() throws SQLException {
+	public synchronized CompletableFuture<Void> deleteRow() throws SQLException {
 		checkUpdateable();
 
 		if (onInsertRow) {
@@ -915,17 +906,19 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		deleteStatement.clearParameters();
 
 		for (int i = 0; i < numKeys; i++) {
-			deleteStatement.setObject(i + 1, primaryKeys.get(i).getValue());
+			deleteStatement.setObject(i + 1, await(primaryKeys.get(i).getValue()));
 		}
 
-		deleteStatement.executeUpdate();
+		await(deleteStatement.executeUpdate());
 
 		rows.remove(current_row);
 		current_row--;
 		moveToCurrentRow();
+		
+		return CompletableFuture.completedFuture(null);
 	}
 
-	public synchronized void insertRow() throws SQLException {
+	public synchronized CompletableFuture<Void> insertRow() throws SQLException {
 		checkUpdateable();
 
 		if (!onInsertRow) {
@@ -967,7 +960,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 				insertStatement.setObject(i, values.next());
 			}
 
-			insertStatement.executeUpdate();
+			await(insertStatement.executeUpdate());
 
 			if (usingOID) {
 				// we have to get the last inserted OID and put it in the resultset
@@ -991,6 +984,8 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 			clearRowBuffer(false);
 
 		}
+		
+		return CompletableFuture.completedFuture(null);
 	}
 
 	public synchronized void moveToCurrentRow() throws SQLException {
@@ -1197,14 +1192,14 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 
 	}
 
-	public void refreshRow() throws SQLException {
+	public CompletableFuture<Void> refreshRow() throws SQLException {
 		checkUpdateable();
 		if (onInsertRow) {
 			throw new PSQLException(GT.tr("Can''t refresh the insert row."), PSQLState.INVALID_CURSOR_STATE);
 		}
 
 		if (isBeforeFirst() || isAfterLast() || rows.isEmpty()) {
-			return;
+			return CompletableFuture.completedFuture(null);
 		}
 
 		StringBuilder selectSQL = new StringBuilder("select ");
@@ -1241,12 +1236,12 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 				java.sql.ResultSet.CONCUR_UPDATABLE);
 
 		for (int j = 0, i = 1; j < numKeys; j++, i++) {
-			selectStatement.setObject(i, primaryKeys.get(j).getValue());
+			selectStatement.setObject(i, await(primaryKeys.get(j).getValue()));
 		}
 
-		VxResultSet rs = (VxResultSet) selectStatement.executeQuery();
+		VxResultSet rs = (VxResultSet) await(selectStatement.executeQuery());
 
-		if (rs.next()) {
+		if (await(rs.next())) {
 			rowBuffer = rs.this_row;
 		}
 
@@ -1259,9 +1254,10 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		selectStatement.close();
 		selectStatement = null;
 
+		return CompletableFuture.completedFuture(null);
 	}
 
-	public synchronized void updateRow() throws SQLException {
+	public synchronized CompletableFuture<Void> updateRow() throws SQLException {
 		checkUpdateable();
 
 		if (onInsertRow) {
@@ -1276,7 +1272,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		}
 
 		if (!doingUpdates) {
-			return; // No work pending.
+			return CompletableFuture.completedFuture(null); // No work pending.
 		}
 
 		StringBuilder updateSQL = new StringBuilder("UPDATE " + onlyTable + tableName + " SET  ");
@@ -1322,10 +1318,10 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		}
 
 		for (int j = 0; j < numKeys; j++, i++) {
-			updateStatement.setObject(i + 1, primaryKeys.get(j).getValue());
+			updateStatement.setObject(i + 1, await(primaryKeys.get(j).getValue()));
 		}
 
-		updateStatement.executeUpdate();
+		await(updateStatement.executeUpdate());
 		updateStatement.close();
 		updateStatement = null;
 
@@ -1338,6 +1334,8 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		connection.getLogger().log(Level.FINE, "done updates");
 		updateValues.clear();
 		doingUpdates = false;
+		
+		return CompletableFuture.completedFuture(null);
 	}
 
 	public synchronized void updateShort(int columnIndex, short x) throws SQLException {
@@ -1727,7 +1725,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		return fetchSize;
 	}
 
-	public boolean next() throws SQLException {
+	public CompletableFuture<Boolean> next() throws SQLException {
 		checkClosed();
 
 		if (onInsertRow) {
@@ -1740,7 +1738,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 				current_row = rows.size();
 				this_row = null;
 				rowBuffer = null;
-				return false; // End of the resultset.
+				return CompletableFuture.completedFuture(false); // End of the resultset.
 			}
 
 			// Ask for some more data.
@@ -1755,11 +1753,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 			}
 
 			// Execute the fetch and update this resultset.
-			try {
-				connection.getQueryExecutor().fetch(cursor, new CursorResultHandler(), fetchRows).get();
-			} catch (InterruptedException | ExecutionException e) {
-				throw new SQLException(e);
-			}
+			await(connection.getQueryExecutor().fetch(cursor, new CursorResultHandler(), fetchRows));
 
 			current_row = 0;
 
@@ -1767,14 +1761,14 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 			if (rows.isEmpty()) {
 				this_row = null;
 				rowBuffer = null;
-				return false;
+				return CompletableFuture.completedFuture(false);
 			}
 		} else {
 			current_row++;
 		}
 
 		initRowBuffer();
-		return true;
+		return CompletableFuture.completedFuture(true);
 	}
 
 	public void close() throws SQLException {
@@ -1795,7 +1789,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		return wasNullFlag;
 	}
 
-	public String getString(int columnIndex) throws SQLException {
+	public CompletableFuture<String> getString(int columnIndex) throws SQLException {
 		connection.getLogger().log(Level.FINEST, "  getString columnIndex: {0}", columnIndex);
 		checkResultSet(columnIndex);
 		if (wasNullFlag) {
@@ -1806,32 +1800,32 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		// text format
 		if (isBinary(columnIndex) && getSQLType(columnIndex) != Types.VARCHAR) {
 			Field field = fields[columnIndex - 1];
-			Object obj = internalGetObject(columnIndex, field);
+			Object obj = await(internalGetObject(columnIndex, field));
 			if (obj == null) {
 				// internalGetObject() knows jdbc-types and some extra like hstore. It does not
 				// know of
 				// PGobject based types like geometric types but getObject does
-				obj = getObject(columnIndex);
+				obj = await(getObject(columnIndex));
 				if (obj == null) {
-					return null;
+					return CompletableFuture.completedFuture(null);
 				}
-				return obj.toString();
+				return CompletableFuture.completedFuture(obj.toString());
 			}
 			// hack to be compatible with text protocol
 			if (obj instanceof java.util.Date) {
 				int oid = field.getOID();
-				return connection.getTimestampUtils().timeToString((java.util.Date) obj,
-						oid == Oid.TIMESTAMPTZ || oid == Oid.TIMETZ);
+				return CompletableFuture.completedFuture(connection.getTimestampUtils().timeToString((java.util.Date) obj,
+						oid == Oid.TIMESTAMPTZ || oid == Oid.TIMETZ));
 			}
 			if ("hstore".equals(getPGType(columnIndex))) {
-				return HStoreConverter.toString((Map<?, ?>) obj);
+				return CompletableFuture.completedFuture(HStoreConverter.toString((Map<?, ?>) obj));
 			}
-			return trimString(columnIndex, obj.toString());
+			return CompletableFuture.completedFuture(trimString(columnIndex, obj.toString()));
 		}
 
 		Encoding encoding = connection.getEncoding();
 		try {
-			return trimString(columnIndex, encoding.decode(this_row[columnIndex - 1]));
+			return CompletableFuture.completedFuture(trimString(columnIndex, encoding.decode(this_row[columnIndex - 1])));
 		} catch (IOException ioe) {
 			throw new PSQLException(GT.tr(
 					"Invalid character data was found.  This is most likely caused by stored data containing characters that are invalid for the character set the database was created in.  The most common example of this is storing 8bit data in a SQL_ASCII database."),
@@ -1868,54 +1862,54 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 	 *      Boolean Type</a>
 	 */
 	@Override
-	public boolean getBoolean(int columnIndex) throws SQLException {
+	public CompletableFuture<Boolean> getBoolean(int columnIndex) throws SQLException {
 		connection.getLogger().log(Level.FINEST, "  getBoolean columnIndex: {0}", columnIndex);
 		checkResultSet(columnIndex);
 		if (wasNullFlag) {
-			return false; // SQL NULL
+			return CompletableFuture.completedFuture(false); // SQL NULL
 		}
 
 		int col = columnIndex - 1;
 		if (Oid.BOOL == fields[col].getOID()) {
 			final byte[] v = this_row[col];
-			return (1 == v.length) && (116 == v[0]); // 116 = 't'
+			return CompletableFuture.completedFuture((1 == v.length) && (116 == v[0])); // 116 = 't'
 		}
 
 		if (isBinary(columnIndex)) {
-			return BooleanTypeUtil.castToBoolean(readDoubleValue(this_row[col], fields[col].getOID(), "boolean"));
+			return CompletableFuture.completedFuture(BooleanTypeUtil.castToBoolean(readDoubleValue(this_row[col], fields[col].getOID(), "boolean")));
 		}
 
-		return BooleanTypeUtil.castToBoolean(getString(columnIndex));
+		return CompletableFuture.completedFuture(BooleanTypeUtil.castToBoolean(await(getString(columnIndex))));
 	}
 
 	private static final BigInteger BYTEMAX = new BigInteger(Byte.toString(Byte.MAX_VALUE));
 	private static final BigInteger BYTEMIN = new BigInteger(Byte.toString(Byte.MIN_VALUE));
 
 	@Override
-	public byte getByte(int columnIndex) throws SQLException {
+	public CompletableFuture<Byte> getByte(int columnIndex) throws SQLException {
 		connection.getLogger().log(Level.FINEST, "  getByte columnIndex: {0}", columnIndex);
 		checkResultSet(columnIndex);
 		if (wasNullFlag) {
-			return 0; // SQL NULL
+			return CompletableFuture.completedFuture((byte)0); // SQL NULL
 		}
 
 		if (isBinary(columnIndex)) {
 			int col = columnIndex - 1;
 			// there is no Oid for byte so must always do conversion from
 			// some other numeric type
-			return (byte) readLongValue(this_row[col], fields[col].getOID(), Byte.MIN_VALUE, Byte.MAX_VALUE, "byte");
+			return CompletableFuture.completedFuture((byte) readLongValue(this_row[col], fields[col].getOID(), Byte.MIN_VALUE, Byte.MAX_VALUE, "byte"));
 		}
 
-		String s = getString(columnIndex);
+		String s = await(getString(columnIndex));
 
 		if (s != null) {
 			s = s.trim();
 			if (s.isEmpty()) {
-				return 0;
+				return CompletableFuture.completedFuture((byte)0);
 			}
 			try {
 				// try the optimal parse
-				return Byte.parseByte(s);
+				return CompletableFuture.completedFuture(Byte.parseByte(s));
 			} catch (NumberFormatException e) {
 				// didn't work, assume the column is not a byte
 				try {
@@ -1929,86 +1923,86 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 						throw new PSQLException(GT.tr("Bad value for type {0} : {1}", "byte", s),
 								PSQLState.NUMERIC_VALUE_OUT_OF_RANGE);
 					}
-					return i.byteValue();
+					return CompletableFuture.completedFuture(i.byteValue());
 				} catch (NumberFormatException ex) {
 					throw new PSQLException(GT.tr("Bad value for type {0} : {1}", "byte", s),
 							PSQLState.NUMERIC_VALUE_OUT_OF_RANGE);
 				}
 			}
 		}
-		return 0; // SQL NULL
+		return CompletableFuture.completedFuture((byte)0); // SQL NULL
 	}
 
 	@Override
-	public short getShort(int columnIndex) throws SQLException {
+	public CompletableFuture<Short> getShort(int columnIndex) throws SQLException {
 		connection.getLogger().log(Level.FINEST, "  getShort columnIndex: {0}", columnIndex);
 		checkResultSet(columnIndex);
 		if (wasNullFlag) {
-			return 0; // SQL NULL
+			return CompletableFuture.completedFuture((short)0); // SQL NULL
 		}
 
 		if (isBinary(columnIndex)) {
 			int col = columnIndex - 1;
 			int oid = fields[col].getOID();
 			if (oid == Oid.INT2) {
-				return ByteConverter.int2(this_row[col], 0);
+				return CompletableFuture.completedFuture(ByteConverter.int2(this_row[col], 0));
 			}
-			return (short) readLongValue(this_row[col], oid, Short.MIN_VALUE, Short.MAX_VALUE, "short");
+			return CompletableFuture.completedFuture((short) readLongValue(this_row[col], oid, Short.MIN_VALUE, Short.MAX_VALUE, "short"));
 		}
 
-		return toShort(getFixedString(columnIndex));
+		return CompletableFuture.completedFuture(toShort(await(getFixedString(columnIndex))));
 	}
 
-	public int getInt(int columnIndex) throws SQLException {
+	public CompletableFuture<Integer> getInt(int columnIndex) throws SQLException {
 		connection.getLogger().log(Level.FINEST, "  getInt columnIndex: {0}", columnIndex);
 		checkResultSet(columnIndex);
 		if (wasNullFlag) {
-			return 0; // SQL NULL
+			return CompletableFuture.completedFuture(0); // SQL NULL
 		}
 
 		if (isBinary(columnIndex)) {
 			int col = columnIndex - 1;
 			int oid = fields[col].getOID();
 			if (oid == Oid.INT4) {
-				return ByteConverter.int4(this_row[col], 0);
+				return CompletableFuture.completedFuture(ByteConverter.int4(this_row[col], 0));
 			}
-			return (int) readLongValue(this_row[col], oid, Integer.MIN_VALUE, Integer.MAX_VALUE, "int");
+			return CompletableFuture.completedFuture((int) readLongValue(this_row[col], oid, Integer.MIN_VALUE, Integer.MAX_VALUE, "int"));
 		}
 
 		Encoding encoding = connection.getEncoding();
 		if (encoding.hasAsciiNumbers()) {
 			try {
-				return getFastInt(columnIndex);
+				return CompletableFuture.completedFuture(getFastInt(columnIndex));
 			} catch (NumberFormatException ex) {
 			}
 		}
-		return toInt(getFixedString(columnIndex));
+		return CompletableFuture.completedFuture(toInt(await(getFixedString(columnIndex))));
 	}
 
-	public long getLong(int columnIndex) throws SQLException {
+	public CompletableFuture<Long> getLong(int columnIndex) throws SQLException {
 		connection.getLogger().log(Level.FINEST, "  getLong columnIndex: {0}", columnIndex);
 		checkResultSet(columnIndex);
 		if (wasNullFlag) {
-			return 0; // SQL NULL
+			return CompletableFuture.completedFuture((long)0); // SQL NULL
 		}
 
 		if (isBinary(columnIndex)) {
 			int col = columnIndex - 1;
 			int oid = fields[col].getOID();
 			if (oid == Oid.INT8) {
-				return ByteConverter.int8(this_row[col], 0);
+				return CompletableFuture.completedFuture(ByteConverter.int8(this_row[col], 0));
 			}
-			return readLongValue(this_row[col], oid, Long.MIN_VALUE, Long.MAX_VALUE, "long");
+			return CompletableFuture.completedFuture(readLongValue(this_row[col], oid, Long.MIN_VALUE, Long.MAX_VALUE, "long"));
 		}
 
 		Encoding encoding = connection.getEncoding();
 		if (encoding.hasAsciiNumbers()) {
 			try {
-				return getFastLong(columnIndex);
+				return CompletableFuture.completedFuture(getFastLong(columnIndex));
 			} catch (NumberFormatException ex) {
 			}
 		}
-		return toLong(getFixedString(columnIndex));
+		return CompletableFuture.completedFuture(toLong(await(getFixedString(columnIndex))));
 	}
 
 	/**
@@ -2213,45 +2207,45 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		return BigDecimal.valueOf(val, scale);
 	}
 
-	public float getFloat(int columnIndex) throws SQLException {
+	public CompletableFuture<Float> getFloat(int columnIndex) throws SQLException {
 		connection.getLogger().log(Level.FINEST, "  getFloat columnIndex: {0}", columnIndex);
 		checkResultSet(columnIndex);
 		if (wasNullFlag) {
-			return 0; // SQL NULL
+			return CompletableFuture.completedFuture(0f); // SQL NULL
 		}
 
 		if (isBinary(columnIndex)) {
 			int col = columnIndex - 1;
 			int oid = fields[col].getOID();
 			if (oid == Oid.FLOAT4) {
-				return ByteConverter.float4(this_row[col], 0);
+				return CompletableFuture.completedFuture(ByteConverter.float4(this_row[col], 0));
 			}
-			return (float) readDoubleValue(this_row[col], oid, "float");
+			return CompletableFuture.completedFuture((float) readDoubleValue(this_row[col], oid, "float"));
 		}
 
-		return toFloat(getFixedString(columnIndex));
+		return CompletableFuture.completedFuture(toFloat(await(getFixedString(columnIndex))));
 	}
 
-	public double getDouble(int columnIndex) throws SQLException {
+	public CompletableFuture<Double> getDouble(int columnIndex) throws SQLException {
 		connection.getLogger().log(Level.FINEST, "  getDouble columnIndex: {0}", columnIndex);
 		checkResultSet(columnIndex);
 		if (wasNullFlag) {
-			return 0; // SQL NULL
+			return CompletableFuture.completedFuture(0d); // SQL NULL
 		}
 
 		if (isBinary(columnIndex)) {
 			int col = columnIndex - 1;
 			int oid = fields[col].getOID();
 			if (oid == Oid.FLOAT8) {
-				return ByteConverter.float8(this_row[col], 0);
+				return CompletableFuture.completedFuture(ByteConverter.float8(this_row[col], 0));
 			}
-			return readDoubleValue(this_row[col], oid, "double");
+			return CompletableFuture.completedFuture(readDoubleValue(this_row[col], oid, "double"));
 		}
 
-		return toDouble(getFixedString(columnIndex));
+		return CompletableFuture.completedFuture(toDouble(await(getFixedString(columnIndex))));
 	}
 
-	public BigDecimal getBigDecimal(int columnIndex, int scale) throws SQLException {
+	public CompletableFuture<BigDecimal> getBigDecimal(int columnIndex, int scale) throws SQLException {
 		connection.getLogger().log(Level.FINEST, "  getBigDecimal columnIndex: {0}", columnIndex);
 		checkResultSet(columnIndex);
 		if (wasNullFlag) {
@@ -2269,9 +2263,9 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 				if (obj instanceof Long || obj instanceof Integer || obj instanceof Byte) {
 					BigDecimal res = BigDecimal.valueOf(((Number) obj).longValue());
 					res = scaleBigDecimal(res, scale);
-					return res;
+					return CompletableFuture.completedFuture(res);
 				}
-				return toBigDecimal(trimMoney(String.valueOf(obj)), scale);
+				return CompletableFuture.completedFuture(toBigDecimal(trimMoney(String.valueOf(obj)), scale));
 			}
 		}
 
@@ -2280,12 +2274,12 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 			try {
 				BigDecimal res = getFastBigDecimal(columnIndex);
 				res = scaleBigDecimal(res, scale);
-				return res;
+				return CompletableFuture.completedFuture(res);
 			} catch (NumberFormatException ex) {
 			}
 		}
 
-		return toBigDecimal(getFixedString(columnIndex), scale);
+		return CompletableFuture.completedFuture(toBigDecimal(await(getFixedString(columnIndex)), scale));
 	}
 
 	/**
@@ -2317,26 +2311,26 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		}
 	}
 
-	public java.sql.Date getDate(int columnIndex) throws SQLException {
+	public CompletableFuture<Date> getDate(int columnIndex) throws SQLException {
 		connection.getLogger().log(Level.FINEST, "  getDate columnIndex: {0}", columnIndex);
 		return getDate(columnIndex, null);
 	}
 
-	public Time getTime(int columnIndex) throws SQLException {
+	public CompletableFuture<Time> getTime(int columnIndex) throws SQLException {
 		connection.getLogger().log(Level.FINEST, "  getTime columnIndex: {0}", columnIndex);
-		return getTime(columnIndex, null);
+		return CompletableFuture.completedFuture((Time)await(getTime(columnIndex, null)));
 	}
 
-	public Timestamp getTimestamp(int columnIndex) throws SQLException {
+	public CompletableFuture<Timestamp> getTimestamp(int columnIndex) throws SQLException {
 		connection.getLogger().log(Level.FINEST, "  getTimestamp columnIndex: {0}", columnIndex);
 		return getTimestamp(columnIndex, null);
 	}
 
-	public InputStream getAsciiStream(int columnIndex) throws SQLException {
+	public CompletableFuture<InputStream> getAsciiStream(int columnIndex) throws SQLException {
 		connection.getLogger().log(Level.FINEST, "  getAsciiStream columnIndex: {0}", columnIndex);
 		checkResultSet(columnIndex);
 		if (wasNullFlag) {
-			return null;
+			return CompletableFuture.completedFuture(null);
 		}
 
 		// Version 7.2 supports AsciiStream for all the PG text types
@@ -2346,14 +2340,14 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		// handling very large values. Thus the implementation ends up calling
 		// getString() since there is no current way to stream the value from the server
 		try {
-			return new ByteArrayInputStream(getString(columnIndex).getBytes("ASCII"));
+			return CompletableFuture.completedFuture(new ByteArrayInputStream(await(getString(columnIndex)).getBytes("ASCII")));
 		} catch (UnsupportedEncodingException l_uee) {
 			throw new PSQLException(GT.tr("The JVM claims not to support the encoding: {0}", "ASCII"),
 					PSQLState.UNEXPECTED_ERROR, l_uee);
 		}
 	}
 
-	public InputStream getUnicodeStream(int columnIndex) throws SQLException {
+	public CompletableFuture<InputStream> getUnicodeStream(int columnIndex) throws SQLException {
 		connection.getLogger().log(Level.FINEST, "  getUnicodeStream columnIndex: {0}", columnIndex);
 		checkResultSet(columnIndex);
 		if (wasNullFlag) {
@@ -2367,7 +2361,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		// handling very large values. Thus the implementation ends up calling
 		// getString() since there is no current way to stream the value from the server
 		try {
-			return new ByteArrayInputStream(getString(columnIndex).getBytes("UTF-8"));
+			return CompletableFuture.completedFuture(new ByteArrayInputStream(await(getString(columnIndex)).getBytes("UTF-8")));
 		} catch (UnsupportedEncodingException l_uee) {
 			throw new PSQLException(GT.tr("The JVM claims not to support the encoding: {0}", "UTF-8"),
 					PSQLState.UNEXPECTED_ERROR, l_uee);
@@ -2394,41 +2388,41 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		return null;
 	}
 
-	public String getString(String columnName) throws SQLException {
+	public CompletableFuture<String> getString(String columnName) throws SQLException {
 		return getString(findColumn(columnName));
 	}
 
 	@Override
-	public boolean getBoolean(String columnName) throws SQLException {
+	public CompletableFuture<Boolean> getBoolean(String columnName) throws SQLException {
 		return getBoolean(findColumn(columnName));
 	}
 
-	public byte getByte(String columnName) throws SQLException {
+	public CompletableFuture<Byte> getByte(String columnName) throws SQLException {
 
 		return getByte(findColumn(columnName));
 	}
 
-	public short getShort(String columnName) throws SQLException {
+	public CompletableFuture<Short> getShort(String columnName) throws SQLException {
 		return getShort(findColumn(columnName));
 	}
 
-	public int getInt(String columnName) throws SQLException {
+	public CompletableFuture<Integer> getInt(String columnName) throws SQLException {
 		return getInt(findColumn(columnName));
 	}
 
-	public long getLong(String columnName) throws SQLException {
+	public CompletableFuture<Long> getLong(String columnName) throws SQLException {
 		return getLong(findColumn(columnName));
 	}
 
-	public float getFloat(String columnName) throws SQLException {
+	public CompletableFuture<Float> getFloat(String columnName) throws SQLException {
 		return getFloat(findColumn(columnName));
 	}
 
-	public double getDouble(String columnName) throws SQLException {
+	public CompletableFuture<Double> getDouble(String columnName) throws SQLException {
 		return getDouble(findColumn(columnName));
 	}
 
-	public BigDecimal getBigDecimal(String columnName, int scale) throws SQLException {
+	public CompletableFuture<BigDecimal> getBigDecimal(String columnName, int scale) throws SQLException {
 		return getBigDecimal(findColumn(columnName), scale);
 	}
 
@@ -2436,23 +2430,23 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		return getBytes(findColumn(columnName));
 	}
 
-	public java.sql.Date getDate(String columnName) throws SQLException {
+	public CompletableFuture<Date> getDate(String columnName) throws SQLException {
 		return getDate(findColumn(columnName), null);
 	}
 
-	public Time getTime(String columnName) throws SQLException {
-		return getTime(findColumn(columnName), null);
+	public CompletableFuture<Time> getTime(String columnName) throws SQLException {
+		return CompletableFuture.completedFuture((Time)await(getTime(findColumn(columnName), null)));
 	}
 
-	public Timestamp getTimestamp(String columnName) throws SQLException {
+	public CompletableFuture<Timestamp> getTimestamp(String columnName) throws SQLException {
 		return getTimestamp(findColumn(columnName), null);
 	}
 
-	public InputStream getAsciiStream(String columnName) throws SQLException {
+	public CompletableFuture<InputStream> getAsciiStream(String columnName) throws SQLException {
 		return getAsciiStream(findColumn(columnName));
 	}
 
-	public InputStream getUnicodeStream(String columnName) throws SQLException {
+	public CompletableFuture<InputStream> getUnicodeStream(String columnName) throws SQLException {
 		return getUnicodeStream(findColumn(columnName));
 	}
 
@@ -2483,7 +2477,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		return null;
 	}
 
-	public Object getObject(int columnIndex) throws SQLException {
+	public CompletableFuture<Object> getObject(int columnIndex) throws SQLException {
 		connection.getLogger().log(Level.FINEST, "  getObject columnIndex: {0}", columnIndex);
 		Field field;
 
@@ -2500,22 +2494,22 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 			return null;
 		}
 
-		Object result = internalGetObject(columnIndex, field);
+		Object result = await(internalGetObject(columnIndex, field));
 
 		if (result != null) {
-			return result;
+			return CompletableFuture.completedFuture(result);
 		}
 
 		if (isBinary(columnIndex)) {
 
-			return connection.getObject(getPGType(columnIndex), null, this_row[columnIndex - 1]);
+			return CompletableFuture.completedFuture(connection.getObject(getPGType(columnIndex), null, this_row[columnIndex - 1]));
 
 		}
-		return connection.getObject(getPGType(columnIndex), getString(columnIndex), null);
+		return CompletableFuture.completedFuture(connection.getObject(getPGType(columnIndex), await(getString(columnIndex)), null));
 
 	}
 
-	public Object getObject(String columnName) throws SQLException {
+	public CompletableFuture<Object> getObject(String columnName) throws SQLException {
 		return getObject(findColumn(columnName));
 	}
 
@@ -2599,8 +2593,8 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 	 * @throws SQLException
 	 *             if something wrong happens
 	 */
-	public String getFixedString(int col) throws SQLException {
-		return trimMoney(getString(col));
+	public CompletableFuture<String> getFixedString(int col) throws SQLException {
+		return CompletableFuture.completedFuture(trimMoney(await(getString(col))));
 	}
 
 	private String trimMoney(String s) {
@@ -3057,7 +3051,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 			this.name = name;
 		}
 
-		Object getValue() throws SQLException {
+		CompletableFuture<Object> getValue() throws SQLException {
 			return getObject(index);
 		}
 	}
@@ -3119,112 +3113,112 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		updateArray(findColumn(columnName), x);
 	}
 
-	public <T> T getObject(int columnIndex, Class<T> type) throws SQLException {
+	public <T> CompletableFuture<T> getObject(int columnIndex, Class<T> type) throws SQLException {
 		if (type == null) {
 			throw new SQLException("type is null");
 		}
 		int sqlType = getSQLType(columnIndex);
 		if (type == BigDecimal.class) {
 			if (sqlType == Types.NUMERIC || sqlType == Types.DECIMAL) {
-				return type.cast(getBigDecimal(columnIndex));
+				return CompletableFuture.completedFuture(type.cast(await(getBigDecimal(columnIndex))));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
 			}
 		} else if (type == String.class) {
 			if (sqlType == Types.CHAR || sqlType == Types.VARCHAR) {
-				return type.cast(getString(columnIndex));
+				return CompletableFuture.completedFuture(type.cast(await(getString(columnIndex))));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
 			}
 		} else if (type == Boolean.class) {
 			if (sqlType == Types.BOOLEAN || sqlType == Types.BIT) {
-				boolean booleanValue = getBoolean(columnIndex);
+				boolean booleanValue = await(getBoolean(columnIndex));
 				if (wasNull()) {
-					return null;
+					return CompletableFuture.completedFuture(null);
 				}
-				return type.cast(booleanValue);
+				return CompletableFuture.completedFuture(type.cast(booleanValue));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
 			}
 		} else if (type == Short.class) {
 			if (sqlType == Types.SMALLINT) {
-				short shortValue = getShort(columnIndex);
+				short shortValue = await(getShort(columnIndex));
 				if (wasNull()) {
-					return null;
+					return CompletableFuture.completedFuture(null);
 				}
-				return type.cast(shortValue);
+				return CompletableFuture.completedFuture(type.cast(shortValue));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
 			}
 		} else if (type == Integer.class) {
 			if (sqlType == Types.INTEGER || sqlType == Types.SMALLINT) {
-				int intValue = getInt(columnIndex);
+				int intValue = await(getInt(columnIndex));
 				if (wasNull()) {
-					return null;
+					return CompletableFuture.completedFuture(null);
 				}
-				return type.cast(intValue);
+				return CompletableFuture.completedFuture(type.cast(intValue));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
 			}
 		} else if (type == Long.class) {
 			if (sqlType == Types.BIGINT) {
-				long longValue = getLong(columnIndex);
+				long longValue = await(getLong(columnIndex));
 				if (wasNull()) {
-					return null;
+					return CompletableFuture.completedFuture(null);
 				}
-				return type.cast(longValue);
+				return CompletableFuture.completedFuture(type.cast(longValue));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
 			}
 		} else if (type == BigInteger.class) {
 			if (sqlType == Types.BIGINT) {
-				long longValue = getLong(columnIndex);
+				long longValue = await(getLong(columnIndex));
 				if (wasNull()) {
-					return null;
+					return CompletableFuture.completedFuture(null);
 				}
-				return type.cast(BigInteger.valueOf(longValue));
+				return CompletableFuture.completedFuture(type.cast(BigInteger.valueOf(longValue)));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
 			}
 		} else if (type == Float.class) {
 			if (sqlType == Types.REAL) {
-				float floatValue = getFloat(columnIndex);
+				float floatValue = await(getFloat(columnIndex));
 				if (wasNull()) {
-					return null;
+					return CompletableFuture.completedFuture(null);
 				}
-				return type.cast(floatValue);
+				return CompletableFuture.completedFuture(type.cast(floatValue));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
 			}
 		} else if (type == Double.class) {
 			if (sqlType == Types.FLOAT || sqlType == Types.DOUBLE) {
-				double doubleValue = getDouble(columnIndex);
+				double doubleValue = await(getDouble(columnIndex));
 				if (wasNull()) {
-					return null;
+					return CompletableFuture.completedFuture(null);
 				}
-				return type.cast(doubleValue);
+				return CompletableFuture.completedFuture(type.cast(doubleValue));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
 			}
 		} else if (type == Date.class) {
 			if (sqlType == Types.DATE) {
-				return type.cast(getDate(columnIndex));
+				return CompletableFuture.completedFuture(type.cast(await(getDate(columnIndex))));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
 			}
 		} else if (type == Time.class) {
 			if (sqlType == Types.TIME) {
-				return type.cast(getTime(columnIndex));
+				return CompletableFuture.completedFuture(type.cast(await(getTime(columnIndex))));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
@@ -3235,7 +3229,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 					|| sqlType == Types.TIMESTAMP_WITH_TIMEZONE
 			// #endif
 			) {
-				return type.cast(getTimestamp(columnIndex));
+				return CompletableFuture.completedFuture(type.cast(await(getTimestamp(columnIndex))));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
@@ -3246,65 +3240,65 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 					|| sqlType == Types.TIMESTAMP_WITH_TIMEZONE
 			// #endif
 			) {
-				Timestamp timestampValue = getTimestamp(columnIndex);
+				Timestamp timestampValue = await(getTimestamp(columnIndex));
 				if (wasNull()) {
-					return null;
+					return CompletableFuture.completedFuture(null);
 				}
 				Calendar calendar = Calendar.getInstance(getDefaultCalendar().getTimeZone());
 				calendar.setTimeInMillis(timestampValue.getTime());
-				return type.cast(calendar);
+				return CompletableFuture.completedFuture(type.cast(calendar));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
 			}
 		} else if (type == Blob.class) {
 			if (sqlType == Types.BLOB || sqlType == Types.BINARY || sqlType == Types.BIGINT) {
-				return type.cast(getBlob(columnIndex));
+				return CompletableFuture.completedFuture(type.cast(await(getBlob(columnIndex))));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
 			}
 		} else if (type == Clob.class) {
 			if (sqlType == Types.CLOB || sqlType == Types.BIGINT) {
-				return type.cast(getClob(columnIndex));
+				return CompletableFuture.completedFuture(type.cast(await(getClob(columnIndex))));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
 			}
 		} else if (type == java.util.Date.class) {
 			if (sqlType == Types.TIMESTAMP) {
-				Timestamp timestamp = getTimestamp(columnIndex);
+				Timestamp timestamp = await(getTimestamp(columnIndex));
 				if (wasNull()) {
-					return null;
+					return CompletableFuture.completedFuture(null);
 				}
-				return type.cast(new java.util.Date(timestamp.getTime()));
+				return CompletableFuture.completedFuture(type.cast(new java.util.Date(timestamp.getTime())));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
 			}
 		} else if (type == Array.class) {
 			if (sqlType == Types.ARRAY) {
-				return type.cast(getArray(columnIndex));
+				return CompletableFuture.completedFuture(type.cast(await(getArray(columnIndex))));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
 			}
 		} else if (type == SQLXML.class) {
 			if (sqlType == Types.SQLXML) {
-				return type.cast(getSQLXML(columnIndex));
+				return CompletableFuture.completedFuture(type.cast(await(getSQLXML(columnIndex))));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
 			}
 		} else if (type == UUID.class) {
-			return type.cast(getObject(columnIndex));
+			return CompletableFuture.completedFuture(type.cast(getObject(columnIndex)));
 		} else if (type == InetAddress.class) {
 			Object addressString = getObject(columnIndex);
 			if (addressString == null) {
-				return null;
+				return CompletableFuture.completedFuture(null);
 			}
 			try {
-				return type.cast(InetAddress.getByName(((PGobject) addressString).getValue()));
+				return CompletableFuture.completedFuture(type.cast(InetAddress.getByName(((PGobject) addressString).getValue())));
 			} catch (UnknownHostException e) {
 				throw new SQLException("could not create inet address from string '" + addressString + "'");
 			}
@@ -3312,58 +3306,58 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 			// #if mvn.project.property.postgresql.jdbc.spec >= "JDBC4.2"
 		} else if (type == LocalDate.class) {
 			if (sqlType == Types.DATE) {
-				Date dateValue = getDate(columnIndex);
+				Date dateValue = await(getDate(columnIndex));
 				if (wasNull()) {
-					return null;
+					return CompletableFuture.completedFuture(null);
 				}
 				long time = dateValue.getTime();
 				if (time == PGStatement.DATE_POSITIVE_INFINITY) {
-					return type.cast(LocalDate.MAX);
+					return CompletableFuture.completedFuture(type.cast(LocalDate.MAX));
 				}
 				if (time == PGStatement.DATE_NEGATIVE_INFINITY) {
-					return type.cast(LocalDate.MIN);
+					return CompletableFuture.completedFuture(type.cast(LocalDate.MIN));
 				}
-				return type.cast(dateValue.toLocalDate());
+				return CompletableFuture.completedFuture(type.cast(dateValue.toLocalDate()));
 			} else if (sqlType == Types.TIMESTAMP) {
-				LocalDateTime localDateTimeValue = getLocalDateTime(columnIndex);
+				LocalDateTime localDateTimeValue = await(getLocalDateTime(columnIndex));
 				if (wasNull()) {
-					return null;
+					return CompletableFuture.completedFuture(null);
 				}
-				return type.cast(localDateTimeValue.toLocalDate());
+				return CompletableFuture.completedFuture(type.cast(localDateTimeValue.toLocalDate()));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
 			}
 		} else if (type == LocalTime.class) {
 			if (sqlType == Types.TIME) {
-				return type.cast(getLocalTime(columnIndex));
+				return CompletableFuture.completedFuture(type.cast(await(getLocalTime(columnIndex))));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
 			}
 		} else if (type == LocalDateTime.class) {
 			if (sqlType == Types.TIMESTAMP) {
-				return type.cast(getLocalDateTime(columnIndex));
+				return CompletableFuture.completedFuture(type.cast(getLocalDateTime(columnIndex)));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
 			}
 		} else if (type == OffsetDateTime.class) {
 			if (sqlType == Types.TIMESTAMP_WITH_TIMEZONE || sqlType == Types.TIMESTAMP) {
-				Timestamp timestampValue = getTimestamp(columnIndex);
+				Timestamp timestampValue = await(getTimestamp(columnIndex));
 				if (wasNull()) {
-					return null;
+					return CompletableFuture.completedFuture(null);
 				}
 				long time = timestampValue.getTime();
 				if (time == PGStatement.DATE_POSITIVE_INFINITY) {
-					return type.cast(OffsetDateTime.MAX);
+					return CompletableFuture.completedFuture(type.cast(OffsetDateTime.MAX));
 				}
 				if (time == PGStatement.DATE_NEGATIVE_INFINITY) {
-					return type.cast(OffsetDateTime.MIN);
+					return CompletableFuture.completedFuture(type.cast(OffsetDateTime.MIN));
 				}
 				// Postgres stores everything in UTC and does not keep original time zone
 				OffsetDateTime offsetDateTime = OffsetDateTime.ofInstant(timestampValue.toInstant(), ZoneOffset.UTC);
-				return type.cast(offsetDateTime);
+				return CompletableFuture.completedFuture(type.cast(offsetDateTime));
 			} else {
 				throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 						PSQLState.INVALID_PARAMETER_VALUE);
@@ -3375,24 +3369,24 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 				object = connection.getObject(getPGType(columnIndex), null, this_row[columnIndex - 1]);
 
 			} else {
-				object = connection.getObject(getPGType(columnIndex), getString(columnIndex), null);
+				object = connection.getObject(getPGType(columnIndex), await(getString(columnIndex)), null);
 
 			}
-			return type.cast(object);
+			return CompletableFuture.completedFuture(type.cast(object));
 		}
 		throw new PSQLException(GT.tr("conversion to {0} from {1} not supported", type, sqlType),
 				PSQLState.INVALID_PARAMETER_VALUE);
 	}
 
-	public <T> T getObject(String columnLabel, Class<T> type) throws SQLException {
+	public <T> CompletableFuture<T> getObject(String columnLabel, Class<T> type) throws SQLException {
 		return getObject(findColumn(columnLabel), type);
 	}
 
-	public Object getObject(String s, Map<String, Class<?>> map) throws SQLException {
+	public CompletableFuture<Object> getObject(String s, Map<String, Class<?>> map) throws SQLException {
 		return getObjectImpl(s, map);
 	}
 
-	public Object getObject(int i, Map<String, Class<?>> map) throws SQLException {
+	public CompletableFuture<Object> getObject(int i, Map<String, Class<?>> map) throws SQLException {
 		return getObjectImpl(i, map);
 	}
 
@@ -3514,17 +3508,17 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		updateClob(findColumn(columnName), reader);
 	}
 
-	public SQLXML getSQLXML(int columnIndex) throws SQLException {
+	public CompletableFuture<SQLXML> getSQLXML(int columnIndex) throws SQLException {
 		connection.getLogger().log(Level.FINEST, "  getSQLXML columnIndex: {0}", columnIndex);
-		String data = getString(columnIndex);
+		String data = await(getString(columnIndex));
 		if (data == null) {
-			return null;
+			return CompletableFuture.completedFuture(null);
 		}
 
-		return new PgSQLXML(connection.createConnection(), data);
+		return CompletableFuture.completedFuture(new PgSQLXML(connection.createConnection(), data));
 	}
 
-	public SQLXML getSQLXML(String columnName) throws SQLException {
+	public CompletableFuture<SQLXML> getSQLXML(String columnName) throws SQLException {
 		return getSQLXML(findColumn(columnName));
 	}
 
