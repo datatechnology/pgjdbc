@@ -725,19 +725,20 @@ public class VxConnection {
 		return readOnly;
 	}
 
-	public void setAutoCommit(boolean autoCommit) throws SQLException {
+	public CompletableFuture<Void> setAutoCommit(boolean autoCommit) throws SQLException {
 		checkClosed();
 
 		if (this.autoCommit == autoCommit) {
-			return;
+			return CompletableFuture.completedFuture(null);
 		}
 
 		if (!this.autoCommit) {
-			commit();
+			await(commit());
 		}
 
 		this.autoCommit = autoCommit;
 		LOGGER.log(Level.FINE, "  setAutoCommit = {0}", autoCommit);
+		return CompletableFuture.completedFuture(null);
 	}
 
 	public boolean getAutoCommit() throws SQLException {
@@ -767,7 +768,7 @@ public class VxConnection {
 		return CompletableFuture.completedFuture(null);
 	}
 
-	public void commit() throws SQLException {
+	public CompletableFuture<Void> commit() throws SQLException {
 		checkClosed();
 
 		if (autoCommit) {
@@ -776,12 +777,10 @@ public class VxConnection {
 		}
 
 		if (queryExecutor.getTransactionState() != TransactionState.IDLE) {
-			try {
-				executeTransactionCommand(commitQuery).get();
-			} catch (InterruptedException | ExecutionException e) {
-				throw new SQLException(e);
-			}
+		  await(executeTransactionCommand(commitQuery));
 		}
+		
+		return CompletableFuture.completedFuture(null);
 	}
 
 	protected void checkClosed() throws SQLException {
@@ -790,7 +789,7 @@ public class VxConnection {
 		}
 	}
 
-	public void rollback() throws SQLException {
+	public CompletableFuture<Void> rollback() throws SQLException {
 		checkClosed();
 
 		if (autoCommit) {
@@ -799,30 +798,24 @@ public class VxConnection {
 		}
 
 		if (queryExecutor.getTransactionState() != TransactionState.IDLE) {
-			try {
-				executeTransactionCommand(rollbackQuery).get();
-			} catch (InterruptedException | ExecutionException e) {
-				throw new SQLException(e);
-			}
+		  await(executeTransactionCommand(rollbackQuery));
 		}
+		
+		return CompletableFuture.completedFuture(null);
 	}
 
 	public TransactionState getTransactionState() {
 		return queryExecutor.getTransactionState();
 	}
 
-	public int getTransactionIsolation() throws SQLException {
+	public CompletableFuture<Integer> getTransactionIsolation() throws SQLException {
 		checkClosed();
 
 		String level = null;
 		VxResultSet rs = null;
-		try {
-			rs = execSQLQuery("SHOW TRANSACTION ISOLATION LEVEL").get();
-		} catch (InterruptedException | ExecutionException e) {
-			throw new SQLException(e);
-		}
-		if (rs.next()) {
-			level = rs.getString(1);
+		rs = await(execSQLQuery("SHOW TRANSACTION ISOLATION LEVEL"));
+		if (await(rs.next())) {
+			level = await(rs.getString(1));
 		}
 		rs.close();
 
@@ -831,24 +824,24 @@ public class VxConnection {
 		// TODO revisit: throw exception instead of silently eating the error in unknown
 		// cases?
 		if (level == null) {
-			return java.sql.Connection.TRANSACTION_READ_COMMITTED; // Best guess.
+			return CompletableFuture.completedFuture(java.sql.Connection.TRANSACTION_READ_COMMITTED); // Best guess.
 		}
 
 		level = level.toUpperCase(Locale.US);
 		if (level.equals("READ COMMITTED")) {
-			return java.sql.Connection.TRANSACTION_READ_COMMITTED;
+			return CompletableFuture.completedFuture(java.sql.Connection.TRANSACTION_READ_COMMITTED);
 		}
 		if (level.equals("READ UNCOMMITTED")) {
-			return java.sql.Connection.TRANSACTION_READ_UNCOMMITTED;
+			return CompletableFuture.completedFuture(java.sql.Connection.TRANSACTION_READ_UNCOMMITTED);
 		}
 		if (level.equals("REPEATABLE READ")) {
-			return java.sql.Connection.TRANSACTION_REPEATABLE_READ;
+			return CompletableFuture.completedFuture(java.sql.Connection.TRANSACTION_REPEATABLE_READ);
 		}
 		if (level.equals("SERIALIZABLE")) {
-			return java.sql.Connection.TRANSACTION_SERIALIZABLE;
+			return CompletableFuture.completedFuture(java.sql.Connection.TRANSACTION_SERIALIZABLE);
 		}
 
-		return java.sql.Connection.TRANSACTION_READ_COMMITTED; // Best guess.
+		return CompletableFuture.completedFuture(java.sql.Connection.TRANSACTION_READ_COMMITTED); // Best guess.
 	}
 
 	public void setTransactionIsolation(int level) throws SQLException {
@@ -1338,34 +1331,34 @@ public class VxConnection {
 		return makeArray(oid, sb.toString());
 	}
 
-	public boolean isValid(int timeout) throws SQLException {
+	public CompletableFuture<Boolean> isValid(int timeout) throws SQLException {
 		if (timeout < 0) {
 			throw new PSQLException(GT.tr("Invalid timeout ({0}<0).", timeout), PSQLState.INVALID_PARAMETER_VALUE);
 		}
 		if (isClosed()) {
-			return false;
+			return CompletableFuture.completedFuture(false);
 		}
 		try {
 			if (replicationConnection) {
 			  VxStatement statement = createStatement();
-				statement.execute("IDENTIFY_SYSTEM");
+				await(statement.execute("IDENTIFY_SYSTEM"));
 				statement.close();
 			} else {
 				if (checkConnectionQuery == null) {
 					checkConnectionQuery = prepareStatement("");
 				}
 				checkConnectionQuery.setQueryTimeout(timeout);
-				checkConnectionQuery.executeUpdate();
+				await(checkConnectionQuery.executeUpdate());
 			}
-			return true;
+			return CompletableFuture.completedFuture(true);
 		} catch (SQLException e) {
 			if (PSQLState.IN_FAILED_SQL_TRANSACTION.getState().equals(e.getSQLState())) {
 				// "current transaction aborted", assume the connection is up and running
-				return true;
+				return CompletableFuture.completedFuture(true);
 			}
 			LOGGER.log(Level.WARNING, GT.tr("Validating connection."), e);
 		}
-		return false;
+		return CompletableFuture.completedFuture(false);
 	}
 
 	public void setClientInfo(String name, String value) throws SQLClientInfoException {
@@ -1467,13 +1460,13 @@ public class VxConnection {
 		throw new SQLException("Cannot unwrap to " + iface.getName());
 	}
 
-	public String getSchema() throws SQLException {
+	public CompletableFuture<String> getSchema() throws SQLException {
 		checkClosed();
 		VxStatement stmt = createStatement();
 		try {
-			VxResultSet rs = stmt.executeQuery("select current_schema()");
+			VxResultSet rs = await(stmt.executeQuery("select current_schema()"));
 			try {
-				if (!rs.next()) {
+				if (!await(rs.next())) {
 					return null; // Is it ever possible?
 				}
 				return rs.getString(1);
@@ -1485,23 +1478,25 @@ public class VxConnection {
 		}
 	}
 
-	public void setSchema(String schema) throws SQLException {
+	public CompletableFuture<Void> setSchema(String schema) throws SQLException {
 		checkClosed();
 		VxStatement stmt = createStatement();
 		try {
 			if (schema == null) {
-				stmt.executeUpdate("SET SESSION search_path TO DEFAULT");
+				await(stmt.executeUpdate("SET SESSION search_path TO DEFAULT"));
 			} else {
 				StringBuilder sb = new StringBuilder();
 				sb.append("SET SESSION search_path TO '");
 				Utils.escapeLiteral(sb, schema, getStandardConformingStrings());
 				sb.append("'");
-				stmt.executeUpdate(sb.toString());
+				await(stmt.executeUpdate(sb.toString()));
 				LOGGER.log(Level.FINE, "  setSchema = {0}", schema);
 			}
 		} finally {
 			stmt.close();
 		}
+		
+		return CompletableFuture.completedFuture(null);
 	}
 
 	public class AbortCommand implements Runnable {
@@ -1577,7 +1572,7 @@ public class VxConnection {
 		return rsHoldability;
 	}
 
-	public Savepoint setSavepoint() throws SQLException {
+	public CompletableFuture<Savepoint> setSavepoint() throws SQLException {
 		checkClosed();
 
 		String pgName;
@@ -1592,13 +1587,13 @@ public class VxConnection {
 		// Note we can't use execSQLUpdate because we don't want
 		// to suppress BEGIN.
 		VxStatement stmt = createStatement();
-		stmt.executeUpdate("SAVEPOINT " + pgName);
+		await(stmt.executeUpdate("SAVEPOINT " + pgName));
 		stmt.close();
 
-		return savepoint;
+		return CompletableFuture.completedFuture(savepoint);
 	}
 
-	public Savepoint setSavepoint(String name) throws SQLException {
+	public CompletableFuture<Savepoint> setSavepoint(String name) throws SQLException {
 		checkClosed();
 
 		if (getAutoCommit()) {
@@ -1611,10 +1606,10 @@ public class VxConnection {
 		// Note we can't use execSQLUpdate because we don't want
 		// to suppress BEGIN.
 		VxStatement stmt = createStatement();
-		stmt.executeUpdate("SAVEPOINT " + savepoint.getPGName());
+		await(stmt.executeUpdate("SAVEPOINT " + savepoint.getPGName()));
 		stmt.close();
 
-		return savepoint;
+		return CompletableFuture.completedFuture(savepoint);
 	}
 
 	public void rollback(Savepoint savepoint) throws SQLException {

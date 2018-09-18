@@ -105,7 +105,7 @@ class VxPreparedStatement extends VxStatement {
 		setPoolable(true); // As per JDBC spec: prepared and callable statements are poolable by
 	}
 
-	public VxResultSet executeQuery(String p_sql) throws SQLException {
+	public CompletableFuture<VxResultSet> executeQuery(String p_sql) throws SQLException {
 		throw new PSQLException(GT.tr("Can''t use query methods that take a query string on a PreparedStatement."),
 				PSQLState.WRONG_OBJECT_TYPE);
 	}
@@ -118,35 +118,35 @@ class VxPreparedStatement extends VxStatement {
 	 *
 	 * @exception SQLException if a database access error occurs
 	 */
-	public VxResultSet executeQuery() throws SQLException {
-		if (!executeWithFlags(0)) {
+	public CompletableFuture<VxResultSet> executeQuery() throws SQLException {
+		if (!await(executeWithFlags(0))) {
 			throw new PSQLException(GT.tr("No results were returned by the query."), PSQLState.NO_DATA);
 		}
 
-		return getSingleResultSet();
+		return CompletableFuture.completedFuture(getSingleResultSet());
 	}
 
-	public int executeUpdate(String p_sql) throws SQLException {
+	public CompletableFuture<Integer> executeUpdate(String p_sql) throws SQLException {
 		throw new PSQLException(GT.tr("Can''t use query methods that take a query string on a PreparedStatement."),
 				PSQLState.WRONG_OBJECT_TYPE);
 	}
 
-	public int executeUpdate() throws SQLException {
-		executeWithFlags(QueryExecutor.QUERY_NO_RESULTS);
+	public CompletableFuture<Integer> executeUpdate() throws SQLException {
+		await(executeWithFlags(QueryExecutor.QUERY_NO_RESULTS));
 
-		return getNoResultUpdateCount();
+		return CompletableFuture.completedFuture(getNoResultUpdateCount());
 	}
 
-	public boolean execute(String p_sql) throws SQLException {
+	public CompletableFuture<Boolean> execute(String p_sql) throws SQLException {
 		throw new PSQLException(GT.tr("Can''t use query methods that take a query string on a PreparedStatement."),
 				PSQLState.WRONG_OBJECT_TYPE);
 	}
 
-	public boolean execute() throws SQLException {
+	public CompletableFuture<Boolean> execute() throws SQLException {
 		return executeWithFlags(0);
 	}
 
-	public boolean executeWithFlags(int flags) throws SQLException {
+	public CompletableFuture<Boolean> executeWithFlags(int flags) throws SQLException {
 		try {
 			checkClosed();
 
@@ -154,15 +154,11 @@ class VxPreparedStatement extends VxStatement {
 				flags |= QueryExecutor.QUERY_EXECUTE_AS_SIMPLE;
 			}
 
-			try {
-				execute(preparedQuery, preparedParameters, flags).get();
-			} catch (InterruptedException | ExecutionException e) {
-				throw new SQLException(e);
-			}
+			await(execute(preparedQuery, preparedParameters, flags));
 
 			synchronized (this) {
 				checkClosed();
-				return (result != null && result.getResultSet() != null);
+				return CompletableFuture.completedFuture((result != null && result.getResultSet() != null));
 			}
 		} finally {
 			defaultTimeZone = null;
@@ -1056,7 +1052,7 @@ class VxPreparedStatement extends VxStatement {
 		}
 	}
 
-	public ResultSetMetaData getMetaData() throws SQLException {
+	public CompletableFuture<ResultSetMetaData> getMetaData() throws SQLException {
 		checkClosed();
 		VxResultSet rs = getResultSet();
 
@@ -1069,12 +1065,9 @@ class VxPreparedStatement extends VxStatement {
 			int flags = QueryExecutor.QUERY_ONESHOT | QueryExecutor.QUERY_DESCRIBE_ONLY
 					| QueryExecutor.QUERY_SUPPRESS_BEGIN;
 			StatementResultHandler handler = new StatementResultHandler();
-			try {
-				connection.getQueryExecutor().execute(preparedQuery.query, preparedParameters, handler, 0, 0, flags)
-						.get();
-			} catch (InterruptedException | ExecutionException e) {
-				throw new SQLException(e);
-			}
+			
+			await(connection.getQueryExecutor().execute(preparedQuery.query, preparedParameters, handler, 0, 0, flags));
+
 			VxResultWrapper wrapper = handler.getResults();
 			if (wrapper != null) {
 				rs = wrapper.getResultSet();
@@ -1082,10 +1075,10 @@ class VxPreparedStatement extends VxStatement {
 		}
 
 		if (rs != null) {
-			return rs.getMetaData();
+			return CompletableFuture.completedFuture(rs.getMetaData());
 		}
 
-		return null;
+		return CompletableFuture.completedFuture(null);
 	}
 
 	public void setArray(int i, java.sql.Array x) throws SQLException {
@@ -1573,7 +1566,7 @@ class VxPreparedStatement extends VxStatement {
 	}
 
 	@Override
-	public int[] executeBatch() throws SQLException {
+	public CompletableFuture<int[]> executeBatch() throws SQLException {
 		try {
 			// Note: in batch prepared statements batchStatements == 1, and batchParameters
 			// is equal
@@ -1605,22 +1598,19 @@ class VxPreparedStatement extends VxStatement {
 		return sharedCalendar;
 	}
 
-	public ParameterMetaData getParameterMetaData() throws SQLException {
+	public CompletableFuture<ParameterMetaData> getParameterMetaData() throws SQLException {
 		int flags = QueryExecutor.QUERY_ONESHOT | QueryExecutor.QUERY_DESCRIBE_ONLY
 				| QueryExecutor.QUERY_SUPPRESS_BEGIN;
 		StatementResultHandler handler = new StatementResultHandler();
-		try {
-			connection.getQueryExecutor().execute(preparedQuery.query, preparedParameters, handler, 0, 0, flags).get();
-		} catch (InterruptedException | ExecutionException e) {
-			throw new SQLException(e);
-		}
+		
+		await(connection.getQueryExecutor().execute(preparedQuery.query, preparedParameters, handler, 0, 0, flags));
 
 		int[] oids = preparedParameters.getTypeOIDs();
 		if (oids != null) {
-			return createParameterMetaData(connection.createConnection(), oids);
+			return CompletableFuture.completedFuture(createParameterMetaData(connection.createConnection(), oids));
 		}
 
-		return null;
+		return CompletableFuture.completedFuture(null);
 
 	}
 
