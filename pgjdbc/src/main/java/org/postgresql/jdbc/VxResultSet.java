@@ -1792,6 +1792,11 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 	public CompletableFuture<String> getString(int columnIndex) throws SQLException {
 		connection.getLogger().log(Level.FINEST, "  getString columnIndex: {0}", columnIndex);
 		checkResultSet(columnIndex);
+
+		Field field = fields[columnIndex - 1];
+		Object obj = null;
+		int oid = 0;
+
 		if (wasNullFlag) {
 			return null;
 		}
@@ -1799,8 +1804,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		// varchar in binary is same as text, other binary fields are converted to their
 		// text format
 		if (isBinary(columnIndex) && getSQLType(columnIndex) != Types.VARCHAR) {
-			Field field = fields[columnIndex - 1];
-			Object obj = await(internalGetObject(columnIndex, field));
+			obj = await(internalGetObject(columnIndex, field));
 			if (obj == null) {
 				// internalGetObject() knows jdbc-types and some extra like hstore. It does not
 				// know of
@@ -1813,7 +1817,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 			}
 			// hack to be compatible with text protocol
 			if (obj instanceof java.util.Date) {
-				int oid = field.getOID();
+				oid = field.getOID();
 				return CompletableFuture.completedFuture(connection.getTimestampUtils().timeToString((java.util.Date) obj,
 						oid == Oid.TIMESTAMPTZ || oid == Oid.TIMETZ));
 			}
