@@ -207,7 +207,7 @@ public class VxDriver implements java.sql.Driver{
    * @see java.sql.Driver#connect
    */
   
-  public VxConnection connectAsync(String url, Properties info) throws SQLException {
+  public CompletableFuture<VxConnection> connectAsync(String url, Properties info) throws SQLException {
     // get defaults
     Properties defaults;
 
@@ -264,7 +264,7 @@ public class VxDriver implements java.sql.Driver{
       Thread thread = new Thread(ct, "PostgreSQL JDBC driver connection thread");
       thread.setDaemon(true); // Don't prevent the VM from shutting down
       thread.start();
-      return ct.getResult(timeout);
+      return CompletableFuture.completedFuture(ct.getResult(timeout));
     } catch (PSQLException ex1) {
       LOGGER.log(Level.SEVERE, "Connection error: ", ex1);
       // re-throw the exception, otherwise it will be caught next, and a
@@ -365,7 +365,7 @@ public class VxDriver implements java.sql.Driver{
       Throwable error;
 
       try {
-        conn = makeConnection(url, props);
+        conn = makeConnection(url, props).get();
         error = null;
       } catch (Throwable t) {
         conn = null;
@@ -454,14 +454,10 @@ public class VxDriver implements java.sql.Driver{
    * @return a new connection
    * @throws SQLException if the connection could not be made
    */
-  public static VxConnection makeConnection(String url, Properties props) throws SQLException {
+  public static CompletableFuture<VxConnection> makeConnection(String url, Properties props) throws SQLException {
     QueryExecutor queryExecutor;
-	try {
-		queryExecutor = ConnectionFactory.openConnection(hostSpecs(props), user(props), database(props), props).get();
-	} catch (InterruptedException | ExecutionException e) {
-		throw new SQLException(e);
-	}
-    return new VxConnection(queryExecutor, props, url);
+		queryExecutor = await(ConnectionFactory.openConnection(hostSpecs(props), user(props), database(props), props));
+    return CompletableFuture.completedFuture(new VxConnection(queryExecutor, props, url));
   }
 
   /**

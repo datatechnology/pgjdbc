@@ -60,10 +60,10 @@ class VxCallableStatement extends VxPreparedStatement {
 		}
 	}
 
-	public int executeUpdate() throws SQLException {
+	public CompletableFuture<Integer> executeUpdate() throws SQLException {
 		if (isFunction) {
-			executeWithFlags(0);
-			return 0;
+			await(executeWithFlags(0));
+			return CompletableFuture.completedFuture(0);
 		}
 		return super.executeUpdate();
 	}
@@ -77,10 +77,10 @@ class VxCallableStatement extends VxPreparedStatement {
 	}
 
 	@Override
-	public boolean executeWithFlags(int flags) throws SQLException {
-		boolean hasResultSet = super.executeWithFlags(flags);
+	public CompletableFuture<Boolean> executeWithFlags(int flags) throws SQLException {
+		boolean hasResultSet = await(super.executeWithFlags(flags));
 		if (!isFunction || !returnTypeSet) {
-			return hasResultSet;
+			return CompletableFuture.completedFuture(hasResultSet);
 		}
 
 		// If we are executing and there are out parameters
@@ -95,7 +95,7 @@ class VxCallableStatement extends VxPreparedStatement {
 			checkClosed();
 			rs = result.getResultSet();
 		}
-		if (!rs.next()) {
+		if (!await(rs.next())) {
 			throw new PSQLException(GT.tr("A CallableStatement was executed with nothing returned."),
 					PSQLState.NO_DATA);
 		}
@@ -126,7 +126,7 @@ class VxCallableStatement extends VxPreparedStatement {
 				j++;
 			}
 
-			callResult[j] = rs.getObject(i + 1);
+			callResult[j] = await(rs.getObject(i + 1));
 			int columnType = rs.getMetaData().getColumnType(i + 1);
 
 			if (columnType != functionReturnType[j]) {
@@ -155,7 +155,7 @@ class VxCallableStatement extends VxPreparedStatement {
 		synchronized (this) {
 			result = null;
 		}
-		return false;
+		return CompletableFuture.completedFuture(false);
 	}
 
 	/**
