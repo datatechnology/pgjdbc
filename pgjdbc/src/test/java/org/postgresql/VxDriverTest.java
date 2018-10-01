@@ -2,7 +2,10 @@ package org.postgresql;
 
 import static org.junit.Assert.*;
 
+import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
@@ -11,6 +14,7 @@ import org.junit.Test;
 import org.postgresql.jdbc.VxConnection;
 import org.postgresql.jdbc.VxResultSet;
 import org.postgresql.jdbc.VxStatement;
+import org.postgresql.test.TestUtil;
 
 public class VxDriverTest {
   
@@ -18,12 +22,13 @@ public class VxDriverTest {
   
   @Before
   public void setup() throws SQLException, InterruptedException, ExecutionException {
-    String url = "jdbc:postgresql://192.168.3.24:5432/test";
+    String url = "jdbc:postgresql://localhost:5432/test";
     Properties props = new Properties();
     props.setProperty("PGHOST", "localhost");
     props.setProperty("PGPORT", "5432");
+    props.setProperty("PGDBNAME", "test");
     props.setProperty("user", "postgres");
-    props.setProperty("password", "Abcde123");
+    props.setProperty("password", "password");
     conn = VxDriver.makeConnection(url, props).get();
   }
 
@@ -34,18 +39,33 @@ public class VxDriverTest {
   
   @Test
   public void queryTest() throws InterruptedException, ExecutionException, SQLException {
-    String sql = "select * from test.student";
+    String sql = "select name from student";
     
     VxStatement stmt = conn.createStatement();
-    
     VxResultSet rs = stmt.executeQuery(sql).get();
     assertNotNull(rs);
-    
+
+    int i = 0;
     while(rs.next().get()) {
-      String username = rs.getString(1).get();
-      assertEquals("Amy1", username);
+      System.out.println(rs.getString(1).get());
+      i += 1;
     }
-    
+
+    System.out.println(i);
+  }
+
+  @Test
+  public void queryTestOriginal() throws Exception {
+    Connection conn = TestUtil.openDB();
+    Statement stmt = conn.createStatement();
+    ResultSet rs = stmt.executeQuery("select * from student");
+    int i = 0;
+    while(rs.next()) {
+      System.out.println(rs.getString(2));
+      i += 1;
+    }
+
+    System.out.println(i);
   }
 
 }

@@ -455,8 +455,7 @@ public class VxDriver implements java.sql.Driver{
    * @throws SQLException if the connection could not be made
    */
   public static CompletableFuture<VxConnection> makeConnection(String url, Properties props) throws SQLException {
-    QueryExecutor queryExecutor;
-		queryExecutor = await(ConnectionFactory.openConnection(hostSpecs(props), user(props), database(props), props));
+    QueryExecutor queryExecutor  = await(ConnectionFactory.openConnection(hostSpecs(props), user(props), database(props), props));
     return CompletableFuture.completedFuture(new VxConnection(queryExecutor, props, url));
   }
 
