@@ -278,7 +278,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 
 			// Caller determines what to do (JDBC3 overrides in this case)
 		}
-		return null;
+		return CompletableFuture.completedFuture(null);
 	}
 
 	private void checkScrollable() throws SQLException {
@@ -385,7 +385,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 	public CompletableFuture<java.sql.Array> getArray(int i) throws SQLException {
 		checkResultSet(i);
 		if (wasNullFlag) {
-			return null;
+			return CompletableFuture.completedFuture(null);
 		}
 
 		int oid = fields[i - 1].getOID();
@@ -414,7 +414,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 	public CompletableFuture<Blob> getBlob(int i) throws SQLException {
 		checkResultSet(i);
 		if (wasNullFlag) {
-			return null;
+		  return CompletableFuture.completedFuture(null);
 		}
 
 		return CompletableFuture.completedFuture(makeBlob(await(getLong(i))));
@@ -450,7 +450,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 	public CompletableFuture<Clob> getClob(int i) throws SQLException {
 		checkResultSet(i);
 		if (wasNullFlag) {
-			return null;
+		  return CompletableFuture.completedFuture(null);
 		}
 
 		return CompletableFuture.completedFuture(makeClob(await(getLong(i))));
@@ -465,7 +465,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 	public CompletableFuture<java.sql.Date> getDate(int i, java.util.Calendar cal) throws SQLException {
 		checkResultSet(i);
 		if (wasNullFlag) {
-			return null;
+		  return CompletableFuture.completedFuture(null);
 		}
 
 		if (cal == null) {
@@ -537,7 +537,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 	private CompletableFuture<LocalTime> getLocalTime(int i) throws SQLException {
 		checkResultSet(i);
 		if (wasNullFlag) {
-			return null;
+		  return CompletableFuture.completedFuture(null);
 		}
 
 		if (isBinary(i)) {
@@ -560,7 +560,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 	public CompletableFuture<Timestamp> getTimestamp(int i, java.util.Calendar cal) throws SQLException {
 		checkResultSet(i);
 		if (wasNullFlag) {
-			return null;
+		  return CompletableFuture.completedFuture(null);
 		}
 
 		if (cal == null) {
@@ -603,7 +603,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 	private CompletableFuture<LocalDateTime> getLocalDateTime(int i) throws SQLException {
 		checkResultSet(i);
 		if (wasNullFlag) {
-			return null;
+		  return CompletableFuture.completedFuture(null);
 		}
 
 		int col = i - 1;
@@ -1798,7 +1798,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		int oid = 0;
 
 		if (wasNullFlag) {
-			return null;
+		  return CompletableFuture.completedFuture(null);
 		}
 
 		// varchar in binary is same as text, other binary fields are converted to their
@@ -2253,7 +2253,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		connection.getLogger().log(Level.FINEST, "  getBigDecimal columnIndex: {0}", columnIndex);
 		checkResultSet(columnIndex);
 		if (wasNullFlag) {
-			return null;
+		  return CompletableFuture.completedFuture(null);
 		}
 
 		if (isBinary(columnIndex)) {
@@ -2262,7 +2262,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 				Object obj = internalGetObject(columnIndex, fields[columnIndex - 1]);
 				
 				if (obj == null) {
-					return null;
+				  return CompletableFuture.completedFuture(null);
 				}
 				if (obj instanceof Long || obj instanceof Integer || obj instanceof Byte) {
 					BigDecimal res = BigDecimal.valueOf(((Number) obj).longValue());
@@ -2355,7 +2355,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		connection.getLogger().log(Level.FINEST, "  getUnicodeStream columnIndex: {0}", columnIndex);
 		checkResultSet(columnIndex);
 		if (wasNullFlag) {
-			return null;
+		  return CompletableFuture.completedFuture(null);
 		}
 
 		// Version 7.2 supports AsciiStream for all the PG text types

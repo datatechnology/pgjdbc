@@ -10,9 +10,7 @@ import org.postgresql.PGNotification;
 import org.postgresql.PGProperty;
 import org.postgresql.copy.CopyManager;
 import org.postgresql.core.BaseConnection;
-import org.postgresql.core.BaseStatement;
 import org.postgresql.core.CachedQuery;
-import org.postgresql.core.ConnectionFactory;
 import org.postgresql.core.Encoding;
 import org.postgresql.core.Oid;
 import org.postgresql.core.Provider;
@@ -436,7 +434,7 @@ public class VxConnection {
 	}
 
 	public CompletableFuture<Void> execSQLUpdate(String s) throws SQLException {
-		BaseStatement stmt = (BaseStatement) createStatement();
+		VxStatement stmt = (VxStatement) createStatement();
 		if (await(stmt.executeWithFlags(s, QueryExecutor.QUERY_NO_METADATA | QueryExecutor.QUERY_NO_RESULTS
 				| QueryExecutor.QUERY_SUPPRESS_BEGIN))) {
 			// throw new PSQLException(GT.tr("A result was returned when none was

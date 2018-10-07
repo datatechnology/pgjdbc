@@ -7,7 +7,6 @@ package org.postgresql;
 
 import org.postgresql.core.ConnectionFactory;
 import org.postgresql.core.QueryExecutor;
-import org.postgresql.jdbc.PgConnection;
 import org.postgresql.jdbc.VxConnection;
 import org.postgresql.util.DriverInfo;
 import org.postgresql.util.ExpressionProperties;
@@ -25,7 +24,6 @@ import java.net.URLDecoder;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
-import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
@@ -35,7 +33,6 @@ import java.util.Enumeration;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.logging.Formatter;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -64,7 +61,7 @@ import static com.ea.async.Async.await;
  * @see org.postgresql.PGConnection
  * @see java.sql.Driver
  */
-public class VxDriver implements java.sql.Driver{
+public class VxDriver {
 
   private static VxDriver registeredDriver;
   private static final Logger PARENT_LOGGER = Logger.getLogger("org.postgresql");
@@ -207,7 +204,7 @@ public class VxDriver implements java.sql.Driver{
    * @see java.sql.Driver#connect
    */
   
-  public CompletableFuture<VxConnection> connectAsync(String url, Properties info) throws SQLException {
+  public CompletableFuture<VxConnection> connect(String url, Properties info) throws SQLException {
     // get defaults
     Properties defaults;
 
@@ -454,7 +451,7 @@ public class VxDriver implements java.sql.Driver{
    * @return a new connection
    * @throws SQLException if the connection could not be made
    */
-  public static CompletableFuture<VxConnection> makeConnection(String url, Properties props) throws SQLException {
+  private static CompletableFuture<VxConnection> makeConnection(String url, Properties props) throws SQLException {
     QueryExecutor queryExecutor  = await(ConnectionFactory.openConnection(hostSpecs(props), user(props), database(props), props));
     return CompletableFuture.completedFuture(new VxConnection(queryExecutor, props, url));
   }
@@ -486,7 +483,6 @@ public class VxDriver implements java.sql.Driver{
    *         be an empty array if no properties are required
    * @see java.sql.Driver#getPropertyInfo
    */
-  @Override
   public DriverPropertyInfo[] getPropertyInfo(String url, Properties info) {
     Properties copy = new Properties(info);
     Properties parse = parseURL(url, copy);
@@ -503,12 +499,10 @@ public class VxDriver implements java.sql.Driver{
     return props;
   }
 
-  @Override
   public int getMajorVersion() {
     return org.postgresql.util.DriverInfo.MAJOR_VERSION;
   }
 
-  @Override
   public int getMinorVersion() {
     return org.postgresql.util.DriverInfo.MINOR_VERSION;
   }
@@ -532,7 +526,6 @@ public class VxDriver implements java.sql.Driver{
    * <p>
    * For PostgreSQL, this is not yet possible, as we are not SQL92 compliant (yet).
    */
-  @Override
   public boolean jdbcCompliant() {
     return false;
   }
@@ -690,7 +683,6 @@ public class VxDriver implements java.sql.Driver{
   }
 
   //#if mvn.project.property.postgresql.jdbc.spec >= "JDBC4.1"
-  @Override
   public java.util.logging.Logger getParentLogger() {
     return PARENT_LOGGER;
   }
@@ -709,13 +701,7 @@ public class VxDriver implements java.sql.Driver{
    * @throws SQLException if registering the driver fails
    */
   public static void register() throws SQLException {
-    if (isRegistered()) {
-      throw new IllegalStateException(
-          "Driver is already registered. It can only be registered once.");
-    }
-    VxDriver registeredDriver = new VxDriver();
-    DriverManager.registerDriver(registeredDriver);
-    VxDriver.registeredDriver = registeredDriver;
+   
   }
 
   /**
@@ -727,12 +713,7 @@ public class VxDriver implements java.sql.Driver{
    * @throws SQLException if deregistering the driver fails
    */
   public static void deregister() throws SQLException {
-    if (!isRegistered()) {
-      throw new IllegalStateException(
-          "Driver is not registered (or it has not been registered using Driver.register() method)");
-    }
-    DriverManager.deregisterDriver(registeredDriver);
-    registeredDriver = null;
+    
   }
 
   /**
@@ -740,10 +721,5 @@ public class VxDriver implements java.sql.Driver{
    */
   public static boolean isRegistered() {
     return registeredDriver != null;
-  }
-
-  @Override
-  public Connection connect(String url, Properties info) throws SQLException {
-    throw new UnsupportedOperationException();
   }
 }

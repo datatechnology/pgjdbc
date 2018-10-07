@@ -70,7 +70,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import static com.ea.async.Async.await;
 
-class VxPreparedStatement extends VxStatement {
+public class VxPreparedStatement extends VxStatement {
 	protected final CachedQuery preparedQuery; // Query fragments for prepared statement.
 	protected final ParameterList preparedParameters; // Parameter values for prepared statement.
 
