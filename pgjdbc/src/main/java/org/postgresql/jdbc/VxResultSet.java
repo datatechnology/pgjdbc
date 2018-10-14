@@ -2259,7 +2259,7 @@ public class VxResultSet implements VxBaseResultSet, org.postgresql.PGRefCursorR
 		if (isBinary(columnIndex)) {
 			int sqlType = getSQLType(columnIndex);
 			if (sqlType != Types.NUMERIC && sqlType != Types.DECIMAL) {
-				Object obj = internalGetObject(columnIndex, fields[columnIndex - 1]);
+				Object obj = await(internalGetObject(columnIndex, fields[columnIndex - 1]));
 				
 				if (obj == null) {
 				  return CompletableFuture.completedFuture(null);

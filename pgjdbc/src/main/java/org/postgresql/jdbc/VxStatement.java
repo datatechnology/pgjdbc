@@ -17,6 +17,7 @@ import org.postgresql.core.ResultCursor;
 import org.postgresql.core.ResultHandlerBase;
 import org.postgresql.core.SqlCommand;
 import org.postgresql.core.VxBaseStatement;
+import org.postgresql.core.v3.QueryExecutorImpl;
 import org.postgresql.util.GT;
 import org.postgresql.util.PSQLException;
 import org.postgresql.util.PSQLState;
@@ -33,10 +34,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import static com.ea.async.Async.await;
 
 public class VxStatement implements VxBaseStatement {
+  private static final Logger LOGGER = Logger.getLogger(VxStatement.class.getName());
 	private static final String[] NO_RETURNING_COLUMNS = new String[0];
 
 	/**
@@ -189,7 +193,7 @@ public class VxStatement implements VxBaseStatement {
 	/**
 	 * ResultHandler implementations for updates, queries, and either-or.
 	 */
-	public class StatementResultHandler extends ResultHandlerBase {
+	public class VxStatementResultHandler extends ResultHandlerBase {
 		private VxResultWrapper results;
 		private VxResultWrapper lastResult;
 
@@ -370,6 +374,8 @@ public class VxStatement implements VxBaseStatement {
 			await(executeInternal(cachedQuery, queryParameters, flags));
 		} catch (SQLException e) {
 			// Don't retry composite queries as it might get partially executed
+		  LOGGER.log(Level.FINEST, cachedQuery.query.getSubqueries() == null ? "DEBUG---NULL" : "DEBUG---NOT NULL");
+		  LOGGER.log(Level.FINEST, connection.getQueryExecutor().willHealOnRetry(e) ? "Retry" : "NORetry");
 			if (cachedQuery.query.getSubqueries() != null || !connection.getQueryExecutor().willHealOnRetry(e)) {
 				throw e;
 				// result.completeExceptionally(e);
@@ -422,7 +428,7 @@ public class VxStatement implements VxBaseStatement {
 		if (queryToExecute.isEmpty()) {
 			flags |= QueryExecutor.QUERY_SUPPRESS_BEGIN;
 		}
-
+		
 		if (!queryToExecute.isStatementDescribed() && forceBinaryTransfers
 				&& (flags & QueryExecutor.QUERY_EXECUTE_AS_SIMPLE) == 0) {
 			// Simple 'Q' execution does not need to know parameter types
@@ -430,7 +436,7 @@ public class VxStatement implements VxBaseStatement {
 			// column types,
 			// thus sending a describe request.
 			int flags2 = flags | QueryExecutor.QUERY_DESCRIBE_ONLY;
-			StatementResultHandler handler2 = new StatementResultHandler();
+			VxStatementResultHandler handler2 = new VxStatementResultHandler();
 			await(connection.getQueryExecutor().execute(queryToExecute, queryParameters, handler2, 0, 0, flags2));
 
 			VxResultWrapper result2 = handler2.getResults();
@@ -439,7 +445,7 @@ public class VxStatement implements VxBaseStatement {
 			}
 		}
 
-		StatementResultHandler handler = new StatementResultHandler();
+		VxStatementResultHandler handler = new VxStatementResultHandler();
 		synchronized (this) {
 			result = null;
 		}
@@ -831,7 +837,7 @@ public class VxStatement implements VxBaseStatement {
 			// can determine its result types for use in binary parameters, batch sizing,
 			// etc.
 			int flags2 = flags | QueryExecutor.QUERY_DESCRIBE_ONLY;
-			StatementResultHandler handler2 = new StatementResultHandler();
+			VxStatementResultHandler handler2 = new VxStatementResultHandler();
 			try {
 				await(connection.getQueryExecutor().execute(queries[0], parameterLists[0], handler2, 0, 0, flags2));
 			} catch (SQLException e) {

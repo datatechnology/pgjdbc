@@ -319,6 +319,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
 					sendSync();
 				}
 				await(processResults(handler, flags));
+				LOGGER.log(Level.FINEST, "return processResults=" + Thread.currentThread().getName());
 				estimatedReceiveBufferBytes = 0;
 			} catch (PGBindException se) {
 				// There are three causes of this error, an
@@ -349,9 +350,11 @@ public class QueryExecutorImpl extends QueryExecutorBase {
 
 		try {
 			handler.handleCompletion();
+			LOGGER.log(Level.FINEST, "catch handler.handleCompletion exception-try=" + Thread.currentThread().getName());
 		} catch (SQLException e) {
+		  LOGGER.log(Level.FINEST, "catch handler.handleCompletion exception-catch=" + Thread.currentThread().getName());
 			await(rollbackIfRequired(autosave, e));
-		}
+		} 
 
 		return CompletableFuture.completedFuture(null);
 	}
@@ -2387,6 +2390,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
 				// Sync)
 				SQLException error = await(receiveErrorResponse());
 				handler.handleError(error);
+				LOGGER.log(Level.FINEST, "set handler.handleError exception=" + Thread.currentThread().getName());
 				if (willHealViaReparse(error)) {
 					// prepared statement ... is not valid kind of error
 					// Technically speaking, the error is unexpected, thus we invalidate other
