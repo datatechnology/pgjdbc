@@ -24,12 +24,9 @@ public class VxDriverTest {
   public void setup() throws SQLException, InterruptedException, ExecutionException {
     String url = "jdbc:postgresql://localhost:5432/test";
     Properties props = new Properties();
-    props.setProperty("PGHOST", "localhost");
-    props.setProperty("PGPORT", "5432");
-    props.setProperty("PGDBNAME", "test");
     props.setProperty("user", "postgres");
-    props.setProperty("password", "password");
-    conn = VxDriver.makeConnection(url, props).get();
+    props.setProperty("password", "Abcde123");
+    conn = new VxDriver().connect(url, props).get();
   }
 
   @Test
@@ -39,7 +36,7 @@ public class VxDriverTest {
   
   @Test
   public void queryTest() throws InterruptedException, ExecutionException, SQLException {
-    String sql = "select name from student";
+    String sql = "select name from test.student";
     
     VxStatement stmt = conn.createStatement();
     VxResultSet rs = stmt.executeQuery(sql).get();
@@ -58,7 +55,7 @@ public class VxDriverTest {
   public void queryTestOriginal() throws Exception {
     Connection conn = TestUtil.openDB();
     Statement stmt = conn.createStatement();
-    ResultSet rs = stmt.executeQuery("select * from student");
+    ResultSet rs = stmt.executeQuery("select * from test.student");
     int i = 0;
     while(rs.next()) {
       System.out.println(rs.getString(2));
