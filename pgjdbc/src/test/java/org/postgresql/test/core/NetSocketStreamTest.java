@@ -16,7 +16,7 @@ public class NetSocketStreamTest {
         Vertx vertx = Vertx.vertx();
         NetClient netClient = vertx.createNetClient();
         NetSocket socket = VertxHelper
-                .vertxTCompletableFuture((Handler<AsyncResult<NetSocket>> h) -> netClient.connect(80, "www.google.com", h))
+                .vertxTCompletableFuture((Handler<AsyncResult<NetSocket>> h) -> netClient.connect(80, "www.sina.com.cn", h))
                 .get();
         NetSocketStream stream = new NetSocketStream(socket);
         stream.getWriteBuffer().appendString("GET")

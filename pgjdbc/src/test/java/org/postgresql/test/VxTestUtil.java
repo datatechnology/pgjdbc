@@ -6,32 +6,33 @@
 package org.postgresql.test;
 
 import org.postgresql.PGProperty;
+import org.postgresql.VxDriver;
 import org.postgresql.core.ServerVersion;
 import org.postgresql.core.Version;
-import org.postgresql.jdbc.PgConnection;
-
+import org.postgresql.jdbc.VxConnection;
+import org.postgresql.jdbc.VxResultSet;
+import org.postgresql.jdbc.VxStatement;
+import org.postgresql.jdbc.VxPreparedStatement;
 import org.junit.Assert;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import static com.ea.async.Async.await;
 
 /**
  * Utility class for JDBC tests
  */
-public class TestUtil {
+public class VxTestUtil {
 	/*
 	 * Returns the Test database JDBC URL
 	 */
@@ -213,7 +214,7 @@ public class TestUtil {
 	}
 
 	public static void initDriver() throws Exception {
-		synchronized (TestUtil.class) {
+		synchronized (VxTestUtil.class) {
 			if (initialized) {
 				return;
 			}
@@ -253,13 +254,12 @@ public class TestUtil {
 	 * @return connection using a priviliged user mostly for tests that the ability
 	 *         to load C functions now as of 4/14
 	 */
-	public static Connection openPrivilegedDB() throws Exception {
+	public static CompletableFuture<VxConnection> openPrivilegedDB() throws Exception {
 		initDriver();
 		Properties properties = new Properties();
 		properties.setProperty("user", getPrivilegedUser());
 		properties.setProperty("password", getPrivilegedPassword());
-		return DriverManager.getConnection(getURL(), properties);
-
+		return new VxDriver().connect(getURL(), properties);
 	}
 
 	/**
@@ -267,7 +267,7 @@ public class TestUtil {
 	 *
 	 * @return connection
 	 */
-	public static Connection openDB() throws Exception {
+	public static CompletableFuture<VxConnection> openDB() throws Exception {
 		return openDB(new Properties());
 	}
 
@@ -275,7 +275,7 @@ public class TestUtil {
 	 * Helper - opens a connection with the allowance for passing additional
 	 * parameters, like "compatible".
 	 */
-	public static Connection openDB(Properties props) throws Exception {
+	public static CompletableFuture<VxConnection> openDB(Properties props) throws Exception {
 		initDriver();
 
 		// Allow properties to override the user name.
@@ -303,13 +303,13 @@ public class TestUtil {
 			}
 		}
 
-		return DriverManager.getConnection(getURL(), props);
+		return new VxDriver().connect(getURL(), props);
 	}
 
 	/*
 	 * Helper - closes an open connection.
 	 */
-	public static void closeDB(Connection con) throws SQLException {
+	public static void closeDB(VxConnection con) throws SQLException {
 		if (con != null) {
 			con.close();
 		}
@@ -318,8 +318,8 @@ public class TestUtil {
 	/*
 	 * Helper - creates a test schema for use by a test
 	 */
-	public static void createSchema(Connection con, String schema) throws SQLException {
-		Statement st = con.createStatement();
+	public static void createSchema(VxConnection con, String schema) throws SQLException, InterruptedException, ExecutionException {
+		VxStatement st = con.createStatement();
 		try {
 			// Drop the schema
 			dropSchema(con, schema);
@@ -327,7 +327,7 @@ public class TestUtil {
 			// Now create the schema
 			String sql = "CREATE SCHEMA " + schema;
 
-			st.executeUpdate(sql);
+			st.executeUpdate(sql).get();
 		} finally {
 			closeQuietly(st);
 		}
@@ -336,12 +336,12 @@ public class TestUtil {
 	/*
 	 * Helper - drops a schema
 	 */
-	public static void dropSchema(Connection con, String schema) throws SQLException {
-		Statement stmt = con.createStatement();
+	public static void dropSchema(VxConnection con, String schema) throws SQLException, InterruptedException, ExecutionException {
+		VxStatement stmt = con.createStatement();
 		try {
 			String sql = "DROP SCHEMA " + schema + " CASCADE ";
 
-			stmt.executeUpdate(sql);
+			stmt.executeUpdate(sql).get();
 		} catch (SQLException ex) {
 			// Since every create schema issues a drop schema
 			// it's easy to get a schema doesn't exist error.
@@ -356,7 +356,7 @@ public class TestUtil {
 	/*
 	 * Helper - creates a test table for use by a test
 	 */
-	public static void createTable(Connection con, String table, String columns) throws SQLException {
+	public static void createTable(VxConnection con, String table, String columns) throws SQLException, InterruptedException, ExecutionException {
 		// by default we don't request oids.
 		createTable(con, table, columns, false);
 	}
@@ -364,8 +364,8 @@ public class TestUtil {
 	/*
 	 * Helper - creates a test table for use by a test
 	 */
-	public static void createTable(Connection con, String table, String columns, boolean withOids) throws SQLException {
-		Statement st = con.createStatement();
+	public static void createTable(VxConnection con, String table, String columns, boolean withOids) throws SQLException, InterruptedException, ExecutionException {
+		VxStatement st = con.createStatement();
 
 		// Drop the table
 		//dropTable(con, table);
@@ -378,7 +378,7 @@ public class TestUtil {
 				sql += " WITH OIDS";
 			}
 
-			st.executeUpdate(sql);
+			st.executeUpdate(sql).get();
 		} finally {
 			closeQuietly(st);
 		}
@@ -393,16 +393,18 @@ public class TestUtil {
 	 *            String
 	 * @param columns
 	 *            String
+	 * @throws ExecutionException 
+	 * @throws InterruptedException 
 	 */
 
-	public static void createTempTable(Connection con, String table, String columns) throws SQLException {
-		Statement st = con.createStatement();
+	public static void createTempTable(VxConnection con, String table, String columns) throws SQLException, InterruptedException, ExecutionException {
+		VxStatement st = con.createStatement();
 		try {
 			// Drop the table
 			dropTable(con, table);
 
 			// Now create the table
-			st.executeUpdate("create temp table " + table + " (" + columns + ")");
+			st.executeUpdate("create temp table " + table + " (" + columns + ")").get();
 		} finally {
 			closeQuietly(st);
 		}
@@ -417,15 +419,17 @@ public class TestUtil {
 	 *            String
 	 * @param values
 	 *            String
+	 * @throws ExecutionException 
+	 * @throws InterruptedException 
 	 */
 
-	public static void createEnumType(Connection con, String name, String values) throws SQLException {
-		Statement st = con.createStatement();
+	public static void createEnumType(VxConnection con, String name, String values) throws SQLException, InterruptedException, ExecutionException {
+		VxStatement st = con.createStatement();
 		try {
 			dropType(con, name);
 
 			// Now create the table
-			st.executeUpdate("create type " + name + " as enum (" + values + ")");
+			st.executeUpdate("create type " + name + " as enum (" + values + ")").get();
 		} finally {
 			closeQuietly(st);
 		}
@@ -440,15 +444,17 @@ public class TestUtil {
 	 *            String
 	 * @param values
 	 *            String
+	 * @throws ExecutionException 
+	 * @throws InterruptedException 
 	 */
 
-	public static void createCompositeType(Connection con, String name, String values) throws SQLException {
-		Statement st = con.createStatement();
+	public static void createCompositeType(VxConnection con, String name, String values) throws SQLException, InterruptedException, ExecutionException {
+		VxStatement st = con.createStatement();
 		try {
 			dropType(con, name);
 
 			// Now create the table
-			st.executeUpdate("create type " + name + " as (" + values + ")");
+			st.executeUpdate("create type " + name + " as (" + values + ")").get();
 		} finally {
 			closeQuietly(st);
 		}
@@ -462,8 +468,8 @@ public class TestUtil {
 	 * @param name
 	 *            String
 	 */
-	public static void dropDomain(Connection con, String name) throws SQLException {
-		Statement st = con.createStatement();
+	public static void dropDomain(VxConnection con, String name) throws SQLException {
+		VxStatement st = con.createStatement();
 		try {
 			st.executeUpdate("drop domain " + name + " cascade");
 		} catch (SQLException ex) {
@@ -484,13 +490,15 @@ public class TestUtil {
 	 *            String
 	 * @param values
 	 *            String
+	 * @throws ExecutionException 
+	 * @throws InterruptedException 
 	 */
-	public static void createDomain(Connection con, String name, String values) throws SQLException {
-		Statement st = con.createStatement();
+	public static void createDomain(VxConnection con, String name, String values) throws SQLException, InterruptedException, ExecutionException {
+		VxStatement st = con.createStatement();
 		try {
 			dropDomain(con, name);
 			// Now create the table
-			st.executeUpdate("create domain " + name + " as " + values);
+			st.executeUpdate("create domain " + name + " as " + values).get();
 		} finally {
 			closeQuietly(st);
 		}
@@ -500,8 +508,8 @@ public class TestUtil {
 	 * drop a sequence because older versions don't have dependency information for
 	 * serials
 	 */
-	public static void dropSequence(Connection con, String sequence) throws SQLException {
-		Statement stmt = con.createStatement();
+	public static void dropSequence(VxConnection con, String sequence) throws SQLException {
+		VxStatement stmt = con.createStatement();
 		try {
 			String sql = "DROP SEQUENCE " + sequence;
 			stmt.executeUpdate(sql);
@@ -515,12 +523,12 @@ public class TestUtil {
 	/*
 	 * Helper - drops a table
 	 */
-	public static void dropTable(Connection con, String table) {
+	public static void dropTable(VxConnection con, String table) throws InterruptedException, ExecutionException {
 
 		try {
-			Statement stmt = con.createStatement();
+			VxStatement stmt = con.createStatement();
 			String sql = "DROP TABLE " + table + " CASCADE ";
-			stmt.executeUpdate(sql);
+			stmt.executeUpdate(sql).get();
 		} catch (SQLException ex) {
 			// Since every create table issues a drop table
 			// it's easy to get a table doesn't exist error.
@@ -535,8 +543,8 @@ public class TestUtil {
 	/*
 	 * Helper - drops a type
 	 */
-	public static void dropType(Connection con, String type) throws SQLException {
-		Statement stmt = con.createStatement();
+	public static void dropType(VxConnection con, String type) throws SQLException {
+		VxStatement stmt = con.createStatement();
 		try {
 			String sql = "DROP TYPE " + type + " CASCADE";
 			stmt.executeUpdate(sql);
@@ -547,13 +555,13 @@ public class TestUtil {
 		}
 	}
 
-	public static void assertNumberOfRows(Connection con, String tableName, int expectedRows, String message)
-			throws SQLException {
-		PreparedStatement ps = null;
-		ResultSet rs = null;
+	public static void assertNumberOfRows(VxConnection con, String tableName, int expectedRows, String message)
+			throws SQLException, InterruptedException, ExecutionException {
+		VxPreparedStatement ps = null;
+		VxResultSet rs = null;
 		try {
 			ps = con.prepareStatement("select count(*) from " + tableName + " as t");
-			rs = ps.executeQuery();
+			rs = ps.executeQuery().get();
 			rs.next();
 			Assert.assertEquals(message, expectedRows, rs.getInt(1));
 		} finally {
@@ -615,22 +623,22 @@ public class TestUtil {
 		return s.substring(s.length() - l);
 	}
 
-	public static String escapeString(Connection con, String value) throws SQLException {
+	public static String escapeString(VxConnection con, String value) throws SQLException {
 		if (con == null) {
 			throw new NullPointerException("Connection is null");
 		}
-		if (con instanceof PgConnection) {
-			return ((PgConnection) con).escapeString(value);
+		if (con instanceof VxConnection) {
+			return ((VxConnection) con).escapeString(value);
 		}
 		return value;
 	}
 
-	public static boolean getStandardConformingStrings(Connection con) {
+	public static boolean getStandardConformingStrings(VxConnection con) {
 		if (con == null) {
 			throw new NullPointerException("Connection is null");
 		}
-		if (con instanceof PgConnection) {
-			return ((PgConnection) con).getStandardConformingStrings();
+		if (con instanceof VxConnection) {
+			return ((VxConnection) con).getStandardConformingStrings();
 		}
 		return false;
 	}
@@ -640,22 +648,22 @@ public class TestUtil {
 	 * at least the given version. This is convenient because we are working with a
 	 * java.sql.Connection, not an Postgres connection.
 	 */
-	public static boolean haveMinimumServerVersion(Connection con, int version) throws SQLException {
+	public static boolean haveMinimumServerVersion(VxConnection con, int version) throws SQLException {
 		if (con == null) {
 			throw new NullPointerException("Connection is null");
 		}
-		if (con instanceof PgConnection) {
-			return ((PgConnection) con).haveMinimumServerVersion(version);
+		if (con instanceof VxConnection) {
+			return ((VxConnection) con).haveMinimumServerVersion(version);
 		}
 		return false;
 	}
 
-	public static boolean haveMinimumServerVersion(Connection con, Version version) throws SQLException {
+	public static boolean haveMinimumServerVersion(VxConnection con, Version version) throws SQLException {
 		if (con == null) {
 			throw new NullPointerException("Connection is null");
 		}
-		if (con instanceof PgConnection) {
-			return ((PgConnection) con).haveMinimumServerVersion(version);
+		if (con instanceof VxConnection) {
+			return ((VxConnection) con).haveMinimumServerVersion(version);
 		}
 		return false;
 	}
@@ -665,20 +673,22 @@ public class TestUtil {
 		return (jvm.compareTo(version) >= 0);
 	}
 
-	public static boolean haveIntegerDateTimes(Connection con) {
+	public static boolean haveIntegerDateTimes(VxConnection con) {
 		if (con == null) {
 			throw new NullPointerException("Connection is null");
 		}
-		if (con instanceof PgConnection) {
-			return ((PgConnection) con).getQueryExecutor().getIntegerDateTimes();
+		if (con instanceof VxConnection) {
+			return ((VxConnection) con).getQueryExecutor().getIntegerDateTimes();
 		}
 		return false;
 	}
 
 	/**
 	 * Print a ResultSet to System.out. This is useful for debugging tests.
+	 * @throws ExecutionException 
+	 * @throws InterruptedException 
 	 */
-	public static void printResultSet(ResultSet rs) throws SQLException {
+	public static void printResultSet(VxResultSet rs) throws SQLException, InterruptedException, ExecutionException {
 		ResultSetMetaData rsmd = rs.getMetaData();
 		for (int i = 1; i <= rsmd.getColumnCount(); i++) {
 			if (i != 1) {
@@ -687,7 +697,7 @@ public class TestUtil {
 			System.out.print(rsmd.getColumnName(i));
 		}
 		System.out.println();
-		while (rs.next()) {
+		while (rs.next().get()) {
 			for (int i = 1; i <= rsmd.getColumnCount(); i++) {
 				if (i != 1) {
 					System.out.print(", ");
@@ -698,11 +708,11 @@ public class TestUtil {
 		}
 	}
 
-	public static List<String> resultSetToLines(ResultSet rs) throws SQLException {
+	public static CompletableFuture<List<String>> resultSetToLines(VxResultSet rs) throws SQLException {
 		List<String> res = new ArrayList<String>();
 		ResultSetMetaData rsmd = rs.getMetaData();
 		StringBuilder sb = new StringBuilder();
-		while (rs.next()) {
+		while (await(rs.next())) {
 			sb.setLength(0);
 			for (int i = 1; i <= rsmd.getColumnCount(); i++) {
 				if (i != 1) {
@@ -712,7 +722,7 @@ public class TestUtil {
 			}
 			res.add(sb.toString());
 		}
-		return res;
+		return CompletableFuture.completedFuture(res);
 	}
 
 	public static String join(List<String> list) {
@@ -732,23 +742,23 @@ public class TestUtil {
 	 * consumed to allow cleanup. Relying on the caller to detect if the column
 	 * lookup was successful.
 	 */
-	public static int findColumn(PreparedStatement query, String label) throws SQLException {
+	public static CompletableFuture<Integer> findColumn(VxPreparedStatement query, String label) throws SQLException {
 		int returnValue = 0;
-		ResultSet rs = query.executeQuery();
-		if (rs.next()) {
+		VxResultSet rs = await(query.executeQuery());
+		if (await(rs.next())) {
 			try {
 				returnValue = rs.findColumn(label);
 			} catch (SQLException sqle) {
 			} // consume exception to allow cleanup of resource.
 		}
 		rs.close();
-		return returnValue;
+		return CompletableFuture.completedFuture(returnValue);
 	}
 
 	/**
 	 * Close a Connection and ignore any errors during closing.
 	 */
-	public static void closeQuietly(Connection conn) {
+	public static void closeQuietly(VxConnection conn) {
 		if (conn != null) {
 			try {
 				conn.close();
@@ -760,7 +770,7 @@ public class TestUtil {
 	/**
 	 * Close a Statement and ignore any errors during closing.
 	 */
-	public static void closeQuietly(Statement stmt) {
+	public static void closeQuietly(VxStatement stmt) {
 		if (stmt != null) {
 			try {
 				stmt.close();
@@ -772,7 +782,7 @@ public class TestUtil {
 	/**
 	 * Close a ResultSet and ignore any errors during closing.
 	 */
-	public static void closeQuietly(ResultSet rs) {
+	public static void closeQuietly(VxResultSet rs) {
 		if (rs != null) {
 			try {
 				rs.close();
@@ -781,46 +791,46 @@ public class TestUtil {
 		}
 	}
 
-	public static void recreateLogicalReplicationSlot(Connection connection, String slotName, String outputPlugin)
-			throws SQLException, InterruptedException, TimeoutException {
+	public static void recreateLogicalReplicationSlot(VxConnection connection, String slotName, String outputPlugin)
+			throws SQLException, InterruptedException, TimeoutException, ExecutionException {
 		// drop previos slot
 		dropReplicationSlot(connection, slotName);
 
-		PreparedStatement stm = null;
+		VxPreparedStatement stm = null;
 		try {
 			stm = connection.prepareStatement("SELECT * FROM pg_create_logical_replication_slot(?, ?)");
 			stm.setString(1, slotName);
 			stm.setString(2, outputPlugin);
-			stm.execute();
+			stm.execute().get();
 		} finally {
 			closeQuietly(stm);
 		}
 	}
 
-	public static void recreatePhysicalReplicationSlot(Connection connection, String slotName)
-			throws SQLException, InterruptedException, TimeoutException {
+	public static void recreatePhysicalReplicationSlot(VxConnection connection, String slotName)
+			throws SQLException, InterruptedException, TimeoutException, ExecutionException {
 		// drop previos slot
 		dropReplicationSlot(connection, slotName);
 
-		PreparedStatement stm = null;
+		VxPreparedStatement stm = null;
 		try {
 			stm = connection.prepareStatement("SELECT * FROM pg_create_physical_replication_slot(?)");
 			stm.setString(1, slotName);
-			stm.execute();
+			stm.execute().get();
 		} finally {
 			closeQuietly(stm);
 		}
 	}
 
-	public static void dropReplicationSlot(Connection connection, String slotName)
-			throws SQLException, InterruptedException, TimeoutException {
+	public static void dropReplicationSlot(VxConnection connection, String slotName)
+			throws SQLException, InterruptedException, TimeoutException, ExecutionException {
 		if (haveMinimumServerVersion(connection, ServerVersion.v9_5)) {
-			PreparedStatement stm = null;
+			VxPreparedStatement stm = null;
 			try {
 				stm = connection.prepareStatement("select pg_terminate_backend(active_pid) from pg_replication_slots "
 						+ "where active = true and slot_name = ?");
 				stm.setString(1, slotName);
-				stm.execute();
+				stm.execute().get();
 			} finally {
 				closeQuietly(stm);
 			}
@@ -828,7 +838,7 @@ public class TestUtil {
 
 		waitStopReplicationSlot(connection, slotName);
 
-		PreparedStatement stm = null;
+		VxPreparedStatement stm = null;
 		try {
 			stm = connection.prepareStatement(
 					"select pg_drop_replication_slot(slot_name) " + "from pg_replication_slots where slot_name = ?");
@@ -839,29 +849,29 @@ public class TestUtil {
 		}
 	}
 
-	public static boolean isReplicationSlotActive(Connection connection, String slotName) throws SQLException {
-		PreparedStatement stm = null;
-		ResultSet rs = null;
+	public static CompletableFuture<Boolean> isReplicationSlotActive(VxConnection connection, String slotName) throws SQLException {
+		VxPreparedStatement stm = null;
+		VxResultSet rs = null;
 
 		try {
 			stm = connection.prepareStatement("select active from pg_replication_slots where slot_name = ?");
 			stm.setString(1, slotName);
-			rs = stm.executeQuery();
-			return rs.next() && rs.getBoolean(1);
+			rs = await(stm.executeQuery());
+			return CompletableFuture.completedFuture(await(rs.next()) && await(rs.getBoolean(1)));
 		} finally {
 			closeQuietly(rs);
 			closeQuietly(stm);
 		}
 	}
 
-	private static void waitStopReplicationSlot(Connection connection, String slotName)
-			throws InterruptedException, TimeoutException, SQLException {
+	private static void waitStopReplicationSlot(VxConnection connection, String slotName)
+			throws InterruptedException, TimeoutException, SQLException, ExecutionException {
 		long startWaitTime = System.currentTimeMillis();
 		boolean stillActive;
 		long timeInWait = 0;
 
 		do {
-			stillActive = isReplicationSlotActive(connection, slotName);
+			stillActive = isReplicationSlotActive(connection, slotName).get();
 			if (stillActive) {
 				TimeUnit.MILLISECONDS.sleep(100L);
 				timeInWait = System.currentTimeMillis() - startWaitTime;

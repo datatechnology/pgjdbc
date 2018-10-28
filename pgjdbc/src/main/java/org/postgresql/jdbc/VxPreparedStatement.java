@@ -70,7 +70,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import static com.ea.async.Async.await;
 
-class VxPreparedStatement extends VxStatement {
+public class VxPreparedStatement extends VxStatement {
 	protected final CachedQuery preparedQuery; // Query fragments for prepared statement.
 	protected final ParameterList preparedParameters; // Parameter values for prepared statement.
 
@@ -1064,7 +1064,7 @@ class VxPreparedStatement extends VxStatement {
 
 			int flags = QueryExecutor.QUERY_ONESHOT | QueryExecutor.QUERY_DESCRIBE_ONLY
 					| QueryExecutor.QUERY_SUPPRESS_BEGIN;
-			StatementResultHandler handler = new StatementResultHandler();
+			VxStatementResultHandler handler = new VxStatementResultHandler();
 			
 			await(connection.getQueryExecutor().execute(preparedQuery.query, preparedParameters, handler, 0, 0, flags));
 
@@ -1601,7 +1601,7 @@ class VxPreparedStatement extends VxStatement {
 	public CompletableFuture<ParameterMetaData> getParameterMetaData() throws SQLException {
 		int flags = QueryExecutor.QUERY_ONESHOT | QueryExecutor.QUERY_DESCRIBE_ONLY
 				| QueryExecutor.QUERY_SUPPRESS_BEGIN;
-		StatementResultHandler handler = new StatementResultHandler();
+		VxStatementResultHandler handler = new VxStatementResultHandler();
 		
 		await(connection.getQueryExecutor().execute(preparedQuery.query, preparedParameters, handler, 0, 0, flags));
 
